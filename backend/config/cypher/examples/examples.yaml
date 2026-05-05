@@ -1,0 +1,45 @@
+# Cypher查询示例
+
+examples:
+  - question: "Keanu Reeves演过哪些电影"
+    cypher: |
+      MATCH (p:Person {name: 'Keanu Reeves'})-[:ACTED_IN]->(m:Movie)
+      RETURN m.title, m.released, m.tagline
+      ORDER BY m.released
+
+  - question: "The Matrix的演员有哪些"
+    cypher: |
+      MATCH (p:Person)-[:ACTED_IN]->(m:Movie {title: 'The Matrix'})
+      RETURN p.name, p.born
+
+  - question: "谁导演了The Matrix"
+    cypher: |
+      MATCH (p:Person)-[:DIRECTED]->(m:Movie {title: 'The Matrix'})
+      RETURN p.name, p.born
+
+  - question: "Tom Hanks和谁合作过电影"
+    cypher: |
+      MATCH (p1:Person {name: 'Tom Hanks'})-[:ACTED_IN]->(m:Movie)<-[:ACTED_IN]-(p2:Person)
+      WHERE p1 <> p2
+      RETURN DISTINCT p2.name, collect(m.title) as movies_together
+      ORDER BY size(movies_together) DESC
+
+  - question: "统计每个演员演过多少电影"
+    cypher: |
+      MATCH (p:Person)-[:ACTED_IN]->(m:Movie)
+      RETURN p.name, count(m) as movie_count
+      ORDER BY movie_count DESC
+      LIMIT 10
+
+  - question: "2000年以后有哪些电影"
+    cypher: |
+      MATCH (m:Movie)
+      WHERE m.released >= 2000
+      RETURN m.title, m.released
+      ORDER BY m.released DESC
+
+  - question: "数据库里有多少类节点"
+    cypher: |
+      MATCH (n)
+      RETURN labels(n)[0] as type, count(n) as count
+      ORDER BY count DESC

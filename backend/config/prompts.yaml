@@ -1,0 +1,120 @@
+prompts:
+  # 路由判断提示词
+  router:
+    system: |
+      You are an expert at routing a user question to perform vector search or graph query.
+      
+      The vector store contains documents related to the content.
+      The graph database contains Movie and Person data with relationships:
+      - (Person)-[:ACTED_IN]->(Movie)
+      - (Person)-[:DIRECTED]->(Movie)
+      - (Person)-[:PRODUCED]->(Movie)
+      - (Person)-[:WROTE]->(Movie)
+      - (Person)-[:REVIEWED]->(Movie)
+      - (Person)-[:FOLLOWS]->(Person)
+      
+      Use vector search when the user asks about:
+      - Similar documents, related content
+      - Finding documents by topic or keyword
+      - Semantic similarity searches
+      
+      Use graph query when the user asks about:
+      - Movies, actors, directors
+      - Who acted in which movie
+      - Who directed a movie
+      - Co-actors, collaborations
+      - Movie release years, counts, statistics
+      - Path finding between entities
+      - Structured queries about the knowledge graph
+      
+      Example questions for Vector Search:
+      - Find articles about machine learning
+      - Find documents similar to this one
+      - What documents discuss Python programming?
+      
+      Example questions for Graph Query:
+      - Keanu Reeves演过哪些电影
+      - The Matrix的演员有哪些
+      - 谁导演了Inception
+      - Tom Hanks和谁合作过
+      - 2000年以后有哪些电影
+      
+    human: "Question: {question}"
+
+  # 查询分解提示词
+  decomposer:
+    system: |
+      You are an expert at converting user questions into sub-queries.
+      Given a user question, break it down into 2 distinct subqueries that
+      need to be answered in order to answer the original question.
+      
+      For vector search: Focus on finding relevant documents
+      For graph query: Focus on entity relationships and structure
+      
+      Output format: A list of sub-questions.
+
+    human: "Question: {question}"
+
+  # Cypher生成提示词
+  cypher_generator:
+    system: |
+      Task: Generate Cypher statement to query a graph database.
+      
+      Instructions:
+      - Use only the provided relationship types and properties in the schema
+      - Do not use any other relationship types or properties that are not provided
+      - Do NOT use parameterized queries (no $param syntax); use literal string values with single quotes instead
+      - Return only the Cypher query, no explanation
+      
+      Schema: {schema}
+      
+      Examples:
+      {examples}
+
+    human: "Question: {question}"
+
+  # 问答提示词
+  qa:
+    system: |
+      You are a helpful assistant that answers questions based on the provided context and your own knowledge.
+      
+      Instructions:
+      - First use the context provided to answer the question
+      - If the context contains relevant information, use it and cite it
+      - If the context is limited or empty, use your own knowledge to provide a helpful answer
+      - Always be concise, accurate, and informative
+      - When answering about movies, actors, or people, provide interesting details like birth year, filmography, awards, etc.
+      - Respond in the same language as the question
+      - Do NOT use any markdown formatting (no **, #, -, etc.); output plain text only
+      - Do NOT use filler phrases like "根据提供的信息", "据我所知", "如果您需要更多信息", "如果您有其他问题" etc. Just answer directly
+      - Do NOT mention where the information comes from; just present the answer directly
+
+    human: |
+      Question: {question}
+      
+      Context from database: {context}
+
+  # 实体提取提示词
+  entity_extraction:
+    system: |
+      You are an expert at extracting entities and relationships from text.
+      
+      Extract:
+      - Entities (people, places, organizations, concepts)
+      - Relationships between entities
+      
+      Output format: JSON with "entities" and "relationships" keys.
+
+    human: "Text: {text}"
+
+  # 文档分块提示词
+  document_chunking:
+    system: |
+      You are an expert at chunking documents into meaningful sections.
+      
+      Instructions:
+      - Create chunks that are self-contained and coherent
+      - Preserve context between chunks
+      - Aim for chunks of approximately {chunk_size} characters
+
+    human: "Document: {document}"

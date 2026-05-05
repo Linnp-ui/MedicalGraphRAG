@@ -1,0 +1,60 @@
+# 预定义Cypher查询模板
+
+queries:
+  # 查找某演员参演的电影
+  find_movies_by_actor: |
+    MATCH (p:Person {name: $name})-[r:ACTED_IN]->(m:Movie)
+    RETURN m.title, m.released, m.tagline
+
+  # 查找某电影的演员
+  find_actors_in_movie: |
+    MATCH (p:Person)-[r:ACTED_IN]->(m:Movie {title: $title})
+    RETURN p.name, p.born
+
+  # 查找某电影的导演
+  find_directors_of_movie: |
+    MATCH (p:Person)-[r:DIRECTED]->(m:Movie {title: $title})
+    RETURN p.name, p.born
+
+  # 查找某演员合作过的演员
+  find_co_actors: |
+    MATCH (p1:Person {name: $name})-[:ACTED_IN]->(m:Movie)<-[:ACTED_IN]-(p2:Person)
+    WHERE p1 <> p2
+    RETURN DISTINCT p2.name, collect(m.title) as movies_together
+    ORDER BY size(movies_together) DESC
+
+  # 查找路径
+  find_paths: |
+    MATCH path = (start:Person {name: $start_entity})-[*1..3]-(end:Person {name: $end_entity})
+    RETURN path, length(path) as path_length
+    ORDER BY path_length
+    LIMIT 5
+
+  # 聚合统计
+  entity_count_by_type: |
+    MATCH (n)
+    RETURN labels(n)[0] as type, count(n) as count
+    ORDER BY count DESC
+
+  # 查找某演员参演电影数
+  movie_count_by_actor: |
+    MATCH (p:Person)-[r:ACTED_IN]->(m:Movie)
+    RETURN p.name, count(m) as movie_count
+    ORDER BY movie_count DESC
+    LIMIT 10
+
+  # 查找某年后的电影
+  movies_after_year: |
+    MATCH (m:Movie)
+    WHERE m.released >= $year
+    RETURN m.title, m.released
+    ORDER BY m.released DESC
+
+  # 向量相似搜索
+  vector_search: |
+    MATCH (c:Chunk)
+    WHERE c.embedding IS NOT NULL
+    WITH c, vector.similarity.cosine(c.embedding, $embedding) as similarity
+    ORDER BY similarity DESC
+    LIMIT $top_k
+    RETURN c.content, similarity

@@ -1,0 +1,523 @@
+import time
+from contextlib import contextmanager
+from typing import Any, Generator, Optional
+
+from neo4j import (
+    AsyncDriver,
+    AsyncGraphDatabase,
+    Driver,
+    GraphDatabase,
+    Result,
+)
+from loguru import logger
+
+from .config import get_settings
+
+# Schema cache: (schema_string, expires_at_timestamp)
+_schema_cache: tuple[str, float] | None = None
+_SCHEMA_CACHE_TTL = 300  # 5 minutes
+
+
+class Neo4jClient:
+    """Neo4j client with connection pooling"""
+
+    def __init__(self, settings: Optional[Any] = None):
+        self.settings = settings or get_settings()
+        self._driver: Optional[Driver] = None
+        self._async_driver: Optional[AsyncDriver] = None
+
+    def _get_driver(self) -> Driver:
+        """Get or create Neo4j driver"""
+        if self._driver is None:
+            self._driver = GraphDatabase.driver(
+                self.settings.neo4j_uri,
+                auth=(
+                    self.settings.neo4j_username,
+                    self.settings.neo4j_password,
+                ),
+                max_connection_lifetime=3600,
+                max_connection_pool_size=50,
+                connection_acquisition_timeout=60,
+            )
+            logger.info(f"Neo4j driver created: {self.settings.neo4j_uri}")
+        return self._driver
+
+    def _get_async_driver(self) -> AsyncDriver:
+        """Get or create async Neo4j driver"""
+        if self._async_driver is None:
+            self._async_driver = AsyncGraphDatabase.driver(
+                self.settings.neo4j_uri,
+                auth=(
+                    self.settings.neo4j_username,
+                    self.settings.neo4j_password,
+                ),
+                max_connection_lifetime=3600,
+                max_connection_pool_size=50,
+                connection_acquisition_timeout=60,
+            )
+            logger.info(f"Async Neo4j driver created: {self.settings.neo4j_uri}")
+        return self._async_driver
+
+    @contextmanager
+    def session(self, **kwargs) -> Generator:
+        """Get a Neo4j session"""
+        driver = self._get_driver()
+        session = driver.session(**kwargs)
+        try:
+            yield session
+        finally:
+            session.close()
+
+    async def async_session(self, **kwargs):
+        """Get an async Neo4j session"""
+        driver = self._get_async_driver()
+        return driver.session(**kwargs)
+
+    def execute_query(self, query: str, parameters: Optional[dict] = None, **kwargs) -> list[dict]:
+        """Execute a Cypher query and return results as list of dicts"""
+        with self.session() as session:
+            result: Result = session.run(query, parameters or {}, **kwargs)
+            return [record.data() for record in result]
+
+    async def execute_query_async(
+        self, query: str, parameters: Optional[dict] = None, **kwargs
+    ) -> list[dict]:
+        """Execute a Cypher query asynchronously"""
+        async with await self.async_session() as session:
+            result = await session.run(query, parameters or {}, **kwargs)
+            return [record.data() async for record in result]
+
+    def verify_connectivity(self) -> bool:
+        """Verify Neo4j connection"""
+        try:
+            with self.session() as session:
+                result = session.run("RETURN 1")
+                result.consume()
+            logger.info("Neo4j connection verified")
+            return True
+        except Exception as e:
+            logger.error(f"Neo4j connection failed: {e}")
+            return False
+
+    def get_schema(self, use_cache: bool = True) -> str:
+        """Get Neo4j database schema, cached for 5 minutes to reduce DB load"""
+        global _schema_cache
+
+        if use_cache and _schema_cache is not None:
+            schema_str, expires_at = _schema_cache
+            if time.time() < expires_at:
+                logger.debug("Returning cached schema")
+                return schema_str
+
+        schema_parts = []
+
+        # Get node labels
+        node_query = "CALL db.labels() YIELD label RETURN collect(label) as labels"
+        result = self.execute_query(node_query)
+        labels = result[0].get("labels", []) if result else []
+
+        # Get relationship types
+        rel_query = "CALL db.relationshipTypes() YIELD relationshipType RETURN collect(relationshipType) as types"
+        result = self.execute_query(rel_query)
+        rel_types = result[0].get("types", []) if result else []
+
+        # Get sample properties for each label
+        properties_query = """
+        MATCH (n)
+        WITH labels(n)[0] as label, keys(n) as keys
+        RETURN label, collect(DISTINCT keys)[0..3] as sample_properties
+        LIMIT 10
+        """
+        result = self.execute_query(properties_query)
+
+        schema_parts.append("Node labels:")
+        for label in labels:
+            props = next(
+                (r["sample_properties"] for r in result if r["label"] == label),
+                [],
+            )
+            schema_parts.append(f"  - {label}: {props}")
+
+        schema_parts.append("\nRelationship types:")
+        for rel_type in rel_types:
+            schema_parts.append(f"  - {rel_type}")
+
+        schema_str = "\n".join(schema_parts)
+
+        # Store in cache
+        _schema_cache = (schema_str, time.time() + _SCHEMA_CACHE_TTL)
+        logger.debug("Schema cached")
+
+        return schema_str
+
+    def invalidate_schema_cache(self):
+        """Force-invalidate the schema cache (call after ingestion)"""
+        global _schema_cache
+        _schema_cache = None
+        logger.info("Schema cache invalidated")
+
+    def get_graph_data(
+        self,
+        node_label: Optional[str] = None,
+        limit: int = 500,
+        offset: int = 0
+    ) -> dict[str, Any]:
+        """获取图谱数据"""
+        if node_label:
+            node_query = f"""
+            MATCH (n:{node_label})
+            WITH n, COUNT {{ (n)--() }} as degree
+            RETURN n, id(n) as node_id, degree, labels(n) as labels
+            ORDER BY degree DESC
+            SKIP $offset
+            LIMIT $limit
+            """
+        else:
+            node_query = """
+            MATCH (n)
+            WITH n, COUNT { (n)--() } as degree
+            RETURN n, id(n) as node_id, degree, labels(n) as labels
+            ORDER BY degree DESC
+            SKIP $offset
+            LIMIT $limit
+            """
+        
+        with self.session() as session:
+            nodes_result = session.run(node_query, offset=offset, limit=limit)
+            nodes = []
+            node_ids = []
+            
+            for record in nodes_result:
+                node_data = record.data()
+                node_id = str(node_data['node_id'])
+                node_ids.append(node_id)
+                
+                labels = node_data.get('labels', [])
+                label = labels[0] if labels else 'Node'
+                
+                node_props = dict(node_data['n']) if node_data.get('n') else {}
+                
+                nodes.append({
+                    'id': node_id,
+                    'label': label,
+                    'properties': node_props,
+                    'degree': node_data.get('degree', 0)
+                })
+            
+            if not node_ids:
+                return {
+                    'nodes': [],
+                    'edges': [],
+                    'stats': {
+                        'total_nodes': 0,
+                        'total_edges': 0,
+                        'node_labels': [],
+                        'relationship_types': []
+                    }
+                }
+            
+            edge_query = """
+            MATCH (n)-[r]->(m)
+            WHERE id(n) IN $node_ids AND id(m) IN $node_ids
+            RETURN id(r) as edge_id, id(startNode(r)) as from_id, 
+                   id(endNode(r)) as to_id, type(r) as rel_type, properties(r) as props
+            """
+            
+            edges_result = session.run(edge_query, node_ids=[int(nid) for nid in node_ids])
+            edges = []
+            
+            for record in edges_result:
+                edge_data = record.data()
+                edges.append({
+                    'id': str(edge_data['edge_id']),
+                    'from': str(edge_data['from_id']),
+                    'to': str(edge_data['to_id']),
+                    'type': edge_data['rel_type'],
+                    'properties': edge_data.get('props') or {}
+                })
+            
+            stats_query = """
+            MATCH (n)
+            WITH count(n) as total_nodes
+            MATCH ()-[r]->()
+            WITH total_nodes, count(r) as total_edges
+            CALL db.labels() YIELD label
+            WITH total_nodes, total_edges, collect(label) as node_labels
+            CALL db.relationshipTypes() YIELD relationshipType
+            RETURN total_nodes, total_edges, node_labels, collect(relationshipType) as relationship_types
+            """
+            
+            stats_result = session.run(stats_query)
+            stats_data = stats_result.single()
+            
+            stats = {
+                'total_nodes': stats_data['total_nodes'] if stats_data else 0,
+                'total_edges': stats_data['total_edges'] if stats_data else 0,
+                'node_labels': stats_data['node_labels'] if stats_data else [],
+                'relationship_types': stats_data['relationship_types'] if stats_data else []
+            }
+            
+            return {
+                'nodes': nodes,
+                'edges': edges,
+                'stats': stats
+            }
+
+    def search_nodes(
+        self,
+        search_text: str,
+        node_label: Optional[str] = None,
+        limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """搜索节点 - 只搜索特定的文本属性"""
+        searchable_props = ['name', 'title', 'description', 'text', 'content', 'label', 'type']
+        
+        if node_label:
+            search_query = f"""
+            MATCH (n:{node_label})
+            WHERE ANY(prop IN $searchable_props 
+                      WHERE prop IN keys(n) 
+                      AND n[prop] IS NOT NULL 
+                      AND toString(n[prop]) CONTAINS $search_text)
+            RETURN n, id(n) as node_id, labels(n) as labels
+            LIMIT $limit
+            """
+        else:
+            search_query = """
+            MATCH (n)
+            WHERE ANY(prop IN $searchable_props 
+                      WHERE prop IN keys(n) 
+                      AND n[prop] IS NOT NULL 
+                      AND toString(n[prop]) CONTAINS $search_text)
+            RETURN n, id(n) as node_id, labels(n) as labels
+            LIMIT $limit
+            """
+        
+        with self.session() as session:
+            try:
+                result = session.run(
+                    search_query, 
+                    search_text=search_text, 
+                    searchable_props=searchable_props,
+                    limit=limit
+                )
+                nodes = []
+                
+                for record in result:
+                    node_data = record.data()
+                    labels = node_data.get('labels', [])
+                    label = labels[0] if labels else 'Node'
+                    
+                    node_props = dict(node_data['n']) if node_data.get('n') else {}
+                    
+                    nodes.append({
+                        'id': str(node_data['node_id']),
+                        'label': label,
+                        'properties': node_props
+                    })
+                
+                return nodes
+            except Exception as e:
+                logger.warning(f"Search failed with error: {e}")
+                return []
+
+    def get_node_detail(self, node_id: str) -> Optional[dict[str, Any]]:
+        """获取节点详情"""
+        with self.session() as session:
+            node_query = """
+            MATCH (n)
+            WHERE id(n) = $node_id
+            RETURN n, id(n) as node_id, labels(n) as labels
+            """
+            
+            node_result = session.run(node_query, node_id=int(node_id))
+            node_data = node_result.single()
+            
+            if not node_data:
+                return None
+            
+            labels = node_data.get('labels', [])
+            label = labels[0] if labels else 'Node'
+            node_props = dict(node_data['n']) if node_data.get('n') else {}
+            
+            node = {
+                'id': str(node_data['node_id']),
+                'label': label,
+                'properties': node_props
+            }
+            
+            incoming_query = """
+            MATCH (m)-[r]->(n)
+            WHERE id(n) = $node_id
+            RETURN id(r) as edge_id, id(m) as from_id, type(r) as rel_type, 
+                   properties(r) as props, labels(m) as from_labels
+            """
+            
+            incoming_result = session.run(incoming_query, node_id=int(node_id))
+            incoming = []
+            neighbors = []
+            
+            for record in incoming_result:
+                edge_data = record.data()
+                incoming.append({
+                    'from_node': str(edge_data['from_id']),
+                    'type': edge_data['rel_type'],
+                    'properties': edge_data.get('props') or {}
+                })
+                
+                from_labels = edge_data.get('from_labels', [])
+                neighbor_label = from_labels[0] if from_labels else 'Node'
+                
+                neighbors.append({
+                    'id': str(edge_data['from_id']),
+                    'label': neighbor_label,
+                    'properties': {}
+                })
+            
+            outgoing_query = """
+            MATCH (n)-[r]->(m)
+            WHERE id(n) = $node_id
+            RETURN id(r) as edge_id, id(m) as to_id, type(r) as rel_type, 
+                   properties(r) as props, labels(m) as to_labels
+            """
+            
+            outgoing_result = session.run(outgoing_query, node_id=int(node_id))
+            outgoing = []
+            
+            for record in outgoing_result:
+                edge_data = record.data()
+                outgoing.append({
+                    'to_node': str(edge_data['to_id']),
+                    'type': edge_data['rel_type'],
+                    'properties': edge_data.get('props') or {}
+                })
+                
+                to_labels = edge_data.get('to_labels', [])
+                neighbor_label = to_labels[0] if to_labels else 'Node'
+                
+                neighbors.append({
+                    'id': str(edge_data['to_id']),
+                    'label': neighbor_label,
+                    'properties': {}
+                })
+            
+            unique_neighbors = []
+            seen_ids = set()
+            for neighbor in neighbors:
+                if neighbor['id'] not in seen_ids:
+                    seen_ids.add(neighbor['id'])
+                    unique_neighbors.append(neighbor)
+            
+            return {
+                'node': node,
+                'relationships': {
+                    'incoming': incoming,
+                    'outgoing': outgoing
+                },
+                'neighbors': unique_neighbors
+            }
+
+    def get_node_neighbors(
+        self,
+        node_id: str,
+        depth: int = 1,
+        relationship_type: Optional[str] = None
+    ) -> dict[str, Any]:
+        """获取节点邻居"""
+        if relationship_type:
+            neighbor_query = f"""
+            MATCH path = (n)-[r:{relationship_type}*1..{depth}]-(m)
+            WHERE id(n) = $node_id
+            UNWIND nodes(path) as node
+            WITH DISTINCT node, id(node) as node_id, labels(node) as node_labels
+            RETURN node, node_id, node_labels
+            """
+        else:
+            neighbor_query = f"""
+            MATCH path = (n)-[r*1..{depth}]-(m)
+            WHERE id(n) = $node_id
+            UNWIND nodes(path) as node
+            WITH DISTINCT node, id(node) as node_id, labels(node) as node_labels
+            RETURN node, node_id, node_labels
+            """
+        
+        with self.session() as session:
+            nodes_result = session.run(neighbor_query, node_id=int(node_id))
+            
+            all_nodes = {}
+            for record in nodes_result:
+                node_data = record.data()
+                node_id_str = str(node_data['node_id'])
+                
+                if node_id_str not in all_nodes:
+                    labels = node_data.get('node_labels', [])
+                    node_props = dict(node_data['node']) if node_data.get('node') else {}
+                    
+                    all_nodes[node_id_str] = {
+                        'id': node_id_str,
+                        'label': labels[0] if labels else 'Node',
+                        'properties': node_props
+                    }
+            
+            if relationship_type:
+                edge_query = f"""
+                MATCH path = (n)-[r:{relationship_type}*1..{depth}]-(m)
+                WHERE id(n) = $node_id
+                UNWIND relationships(path) as rel
+                WITH DISTINCT rel, id(rel) as edge_id, id(startNode(rel)) as from_id, 
+                       id(endNode(rel)) as to_id, type(rel) as rel_type
+                RETURN edge_id, from_id, to_id, rel_type, properties(rel) as props
+                """
+            else:
+                edge_query = f"""
+                MATCH path = (n)-[r*1..{depth}]-(m)
+                WHERE id(n) = $node_id
+                UNWIND relationships(path) as rel
+                WITH DISTINCT rel, id(rel) as edge_id, id(startNode(rel)) as from_id, 
+                       id(endNode(rel)) as to_id, type(rel) as rel_type
+                RETURN edge_id, from_id, to_id, rel_type, properties(rel) as props
+                """
+            
+            edges_result = session.run(edge_query, node_id=int(node_id))
+            
+            all_edges = {}
+            for record in edges_result:
+                edge_data = record.data()
+                edge_id = str(edge_data['edge_id'])
+                
+                if edge_id not in all_edges:
+                    all_edges[edge_id] = {
+                        'id': edge_id,
+                        'from': str(edge_data['from_id']),
+                        'to': str(edge_data['to_id']),
+                        'type': edge_data['rel_type'],
+                        'properties': edge_data.get('props') or {}
+                    }
+            
+            return {
+                'nodes': list(all_nodes.values()),
+                'edges': list(all_edges.values()),
+                'center_node': node_id
+            }
+
+    def close(self):
+        """Close Neo4j driver"""
+        if self._driver:
+            self._driver.close()
+            self._driver = None
+        if self._async_driver:
+            self._async_driver.close()
+            self._async_driver = None
+        logger.info("Neo4j drivers closed")
+
+
+# Singleton instance
+_neo4j_client: Optional[Neo4jClient] = None
+
+
+def get_neo4j_client() -> Neo4jClient:
+    """Get singleton Neo4j client"""
+    global _neo4j_client
+    if _neo4j_client is None:
+        _neo4j_client = Neo4jClient()
+    return _neo4j_client

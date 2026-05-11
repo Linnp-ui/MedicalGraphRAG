@@ -76,10 +76,10 @@ class QAChain:
     def _get_llm(self) -> ChatOpenAI:
         if self.llm is None:
             self.llm = ChatOpenAI(
-                model=self.settings.openai_model,
+                model=self.settings.dashscope_model,
                 temperature=0,
-                api_key=self.settings.openai_api_key,
-                base_url=self.settings.openai_base_url or "https://api.openai.com/v1",
+                api_key=self.settings.dashscope_api_key,
+                base_url=self.settings.dashscope_base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1",
                 request_timeout=LLM_TIMEOUT_SECONDS,
                 max_retries=LLM_MAX_RETRIES,
             )

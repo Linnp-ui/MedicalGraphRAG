@@ -6,11 +6,12 @@ from loguru import logger
 
 from ..core.config import get_settings
 from ..core.neo4j_client import Neo4jClient
+from ..core.medical_schema import MEDICAL_SCHEMA, MedicalEntityType, MedicalRelationshipType
 from .document_loader import Document, DocumentLoader
 from .text_splitter import TextChunk
 from .embedding import EmbeddingClient, get_embedding_client
-from ..core.medical_schema import MEDICAL_SCHEMA
 from .medical_processor import MedicalTextProcessor
+from .knowledge_fusion import KnowledgeFusionEngine
 
 
 @dataclass
@@ -43,6 +44,9 @@ class KnowledgeGraphBuilder:
         self.neo4j_client = neo4j_client
         self.embedding_client = embedding_client
         self.medical_processor = MedicalTextProcessor()
+        self.fusion_engine = KnowledgeFusionEngine()
+        self._medical_entity_types = {e.value for e in MedicalEntityType}
+        self._medical_relation_types = {r.value for r in MedicalRelationshipType}
 
     def _get_neo4j_client(self) -> Neo4jClient:
         if self.neo4j_client is None:
@@ -131,21 +135,51 @@ class KnowledgeGraphBuilder:
                         rel_set.add(rel_key)
                         relationships.append(rel)
 
-        # 将去重后的实体写入Neo4j
-        for entity in entity_map.values():
-            self._create_entity_node(entity)
+        # 知识融合：实体消歧和关系对齐（仅医疗领域）
+        if settings.domain == "medical" and (entity_map or relationships):
+            entities_for_fusion = [
+                {"name": e.name, "type": e.type, "properties": e.properties}
+                for e in entity_map.values()
+            ]
+            rels_for_fusion = [
+                {"source": r.source, "target": r.target, "type": r.type, "properties": r.properties}
+                for r in relationships
+            ]
 
-        # 将去重后的关系写入Neo4j
-        for rel in relationships:
-            self._create_relationship(rel)
+            fused_entities, fused_rels = self.fusion_engine.fuse(entities_for_fusion, rels_for_fusion)
 
-        # 将文本块与实体关联
+            fused_entities = self.fusion_engine.link_to_standard_ontology(fused_entities)
+
+            fused_entity_map = {e["name"]: e for e in fused_entities}
+            fused_relationships = fused_rels
+
+            logger.info(f"Knowledge fusion completed: {len(fused_entity_map)} entities, {len(fused_relationships)} relationships")
+        else:
+            fused_entity_map = {e.name: {"name": e.name, "type": e.type, "properties": e.properties} for e in entity_map.values()}
+            fused_relationships = [{"source": r.source, "target": r.target, "type": r.type, "properties": r.properties} for r in relationships]
+
+        # 将融合后的实体写入Neo4j
+        for entity in fused_entity_map.values():
+            entity_obj = Entity(name=entity["name"], type=entity["type"], properties=entity["properties"])
+            self._create_entity_node(entity_obj)
+
+        # 将融合后的关系写入Neo4j
+        for rel in fused_relationships:
+            rel_obj = Relationship(source=rel["source"], target=rel["target"], type=rel.get("aligned_type", rel["type"]), properties=rel["properties"])
+            self._create_relationship(rel_obj)
+
+        # 将文本块与实体关联（使用融合后的实体名称）
         for entity_key, chunk_id in chunk_entity_links:
             if entity_key in entity_map:
-                self._link_entity_to_chunk(entity_map[entity_key].name, chunk_id)
+                original_entity = entity_map[entity_key]
+                if settings.domain == "medical" and original_entity.name in fused_entity_map:
+                    fused_name = fused_entity_map[original_entity.name]["name"]
+                    self._link_entity_to_chunk(fused_name, chunk_id)
+                else:
+                    self._link_entity_to_chunk(original_entity.name, chunk_id)
 
-        results["entities_extracted"] = len(entity_map)
-        results["relationships_created"] = len(relationships)
+        results["entities_extracted"] = len(fused_entity_map)
+        results["relationships_created"] = len(fused_relationships)
 
         logger.info(f"Document {document.id} ingested: {results}")
         return results
@@ -220,50 +254,48 @@ class KnowledgeGraphBuilder:
         llm = ChatOpenAI(
             model=settings.extraction_model,
             temperature=0,
-            api_key=settings.openai_api_key,
-            base_url=settings.openai_base_url or "https://api.openai.com/v1",
+            api_key=settings.dashscope_api_key,
+            base_url=settings.dashscope_base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        )
+
+        json_example = (
+            '{{'
+            '  "entities": ['
+            '    {{"name": "实体名", "type": "实体类型", "properties": {{}}}}'
+            '  ],'
+            '  "relationships": ['
+            '    {{"source": "源实体", "target": "目标实体", "type": "关系类型", "properties": {{}}}}'
+            '  ]'
+            '}}'
         )
 
         if settings.domain == "medical":
-            system_prompt = f"""你是一个医疗实体关系抽取专家。从给定的文本中提取医疗相关的实体和关系。
+            entity_types = ", ".join(MEDICAL_SCHEMA['entities'])
+            rel_types = ", ".join(MEDICAL_SCHEMA['relationships'])
+            entity_descriptions = "\n".join([f"- {k}: {v}" for k, v in MEDICAL_SCHEMA['descriptions'].items()])
 
-请以JSON格式返回，结构如下：
-{{
-  "entities": [
-    {{"name": "实体名", "type": "实体类型", "properties": {{}}}}
-  ],
-  "relationships": [
-    {{"source": "源实体", "target": "目标实体", "type": "关系类型", "properties": {{}}}}
-  ]
-}}
-
-可用的实体类型包括：{", ".join(MEDICAL_SCHEMA['entities'])}
-可用的关系类型包括：{", ".join(MEDICAL_SCHEMA['relationships'])}
-
-实体类型说明：
-{chr(10).join([f"- {k}: {v}" for k, v in MEDICAL_SCHEMA['descriptions'].items()])}
-
-只提取文本中明确提到的医疗实体和关系。只返回JSON，不要有其他解释文字。"""
+            system_message = (
+                "你是一个医疗实体关系抽取专家。从给定的文本中提取医疗相关的实体和关系。\n\n"
+                "请以JSON格式返回，结构如下：\n"
+                + json_example +
+                "\n\n可用的实体类型包括：" + entity_types +
+                "\n可用的关系类型包括：" + rel_types +
+                "\n\n实体类型说明：\n" + entity_descriptions +
+                "\n\n只提取文本中明确提到的医疗实体和关系。只返回JSON，不要有其他解释文字。"
+            )
         else:
-            system_prompt = """你是一个实体关系抽取专家。从给定的文本中提取实体和关系。
-
-请以JSON格式返回，结构如下：
-{{
-  "entities": [
-    {{"name": "实体名", "type": "实体类型", "properties": {{}}}}
-  ],
-  "relationships": [
-    {{"source": "源实体", "target": "目标实体", "type": "关系类型", "properties": {{}}}}
-  ]
-}}
-
-实体类型可以是：Person, Organization, Location, Product, Concept, System, Database, Framework 等
-关系类型可以是：USES, HAS, WORKS_AT, LOCATED_IN, RELATED_TO 等
-只提取文本中明确提到的实体和关系。只返回JSON，不要有其他解释文字。"""
+            system_message = (
+                "你是一个实体关系抽取专家。从给定的文本中提取实体和关系。\n\n"
+                "请以JSON格式返回，结构如下：\n"
+                + json_example +
+                "\n\n实体类型可以是：Person, Organization, Location, Product, Concept, System, Database, Framework 等"
+                "\n关系类型可以是：USES, HAS, WORKS_AT, LOCATED_IN, RELATED_TO 等"
+                "\n只提取文本中明确提到的实体和关系。只返回JSON，不要有其他解释文字。"
+            )
 
         prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", system_prompt),
+                ("system", system_message),
                 ("human", "从以下文本中提取实体和关系：\n\n{text}"),
             ]
         )
@@ -308,22 +340,36 @@ class KnowledgeGraphBuilder:
             return [], []
 
     def _create_entity_node(self, entity: Entity):
-        """在Neo4j中创建实体节点（基于名称合并，无需APOC）
+        """在Neo4j中创建实体节点（支持医疗领域的特定标签）
 
         Args:
             entity: 要创建的实体
         """
         client = self._get_neo4j_client()
-        query = """
-        MERGE (e:Entity {name: $name})
-        ON CREATE SET e.type = $type, e.properties = $properties
-        ON MATCH SET
-            e.type = CASE WHEN e.type IS NULL THEN $type ELSE e.type END,
-            e.properties = CASE
+        settings = get_settings()
+
+        if settings.domain == "medical" and entity.type in self._medical_entity_types:
+            labels = f"Entity:{entity.type}"
+            query = f"""
+            MERGE (e:{labels} {{name: $name}})
+            ON CREATE SET e.properties = $properties
+            ON MATCH SET e.properties = CASE
                 WHEN e.properties IS NULL THEN $properties
                 ELSE e.properties + $merge_props
             END
-        """
+            """
+        else:
+            query = """
+            MERGE (e:Entity {name: $name})
+            ON CREATE SET e.type = $type, e.properties = $properties
+            ON MATCH SET
+                e.type = CASE WHEN e.type IS NULL THEN $type ELSE e.type END,
+                e.properties = CASE
+                    WHEN e.properties IS NULL THEN $properties
+                    ELSE e.properties + $merge_props
+                END
+            """
+
         client.execute_query(
             query,
             {
@@ -348,18 +394,38 @@ class KnowledgeGraphBuilder:
         )
 
     def _create_relationship(self, relationship: Relationship):
-        """在Neo4j中创建关系
+        """在Neo4j中创建关系（支持医疗领域的特定关系类型）
 
         Args:
             relationship: 要创建的关系
         """
         client = self._get_neo4j_client()
-        query = """
-        MATCH (e1:Entity {name: $source})
-        MATCH (e2:Entity {name: $target})
-        MERGE (e1)-[r:RELATES_TO {type: $rel_type}]->(e2)
-        ON CREATE SET r.properties = $properties
-        """
+        settings = get_settings()
+
+        if settings.domain == "medical" and relationship.type in self._medical_relation_types:
+            rel_label = relationship.type
+            query = f"""
+            MATCH (e1:Entity {{name: $source}})
+            MATCH (e2:Entity {{name: $target}})
+            MERGE (e1)-[r:{rel_label}]->(e2)
+            ON CREATE SET r.properties = $properties
+            ON MATCH SET r.properties = CASE
+                WHEN r.properties IS NULL THEN $properties
+                ELSE r.properties + $properties
+            END
+            """
+        else:
+            query = """
+            MATCH (e1:Entity {name: $source})
+            MATCH (e2:Entity {name: $target})
+            MERGE (e1)-[r:RELATES_TO {type: $rel_type}]->(e2)
+            ON CREATE SET r.properties = $properties
+            ON MATCH SET r.properties = CASE
+                WHEN r.properties IS NULL THEN $properties
+                ELSE r.properties + $properties
+            END
+            """
+
         client.execute_query(
             query,
             {

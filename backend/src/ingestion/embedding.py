@@ -6,7 +6,7 @@ from ..core.config import get_settings
 
 
 class EmbeddingClient:
-    """OpenAI embedding client"""
+    """DashScope embedding client"""
 
     def __init__(
         self,
@@ -19,15 +19,15 @@ class EmbeddingClient:
         self._client = None
 
     def _get_client(self):
-        """Get or create OpenAI client"""
+        """Get or create DashScope client"""
         if self._client is None:
             try:
                 from openai import OpenAI
 
                 settings = get_settings()
                 self._client = OpenAI(
-                    api_key=settings.openai_api_key,
-                    base_url=settings.openai_base_url or "https://api.openai.com/v1",
+                    api_key=settings.dashscope_api_key,
+                    base_url=settings.dashscope_base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1",
                 )
             except ImportError:
                 logger.error("openai package not installed")

@@ -14,9 +14,9 @@ class Settings(BaseSettings):
     neo4j_username: str = Field(default="neo4j", alias="NEO4J_USERNAME")
     neo4j_password: str = Field(default="password", alias="NEO4J_PASSWORD")
 
-    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
-    openai_base_url: str = Field(default="", alias="OPENAI_BASE_URL")
-    openai_model: str = Field(default="gpt-4o-mini", alias="OPENAI_MODEL")
+    dashscope_api_key: str = Field(default="", alias="DASHSCOPE_API_KEY")
+    dashscope_base_url: str = Field(default="", alias="DASHSCOPE_BASE_URL")
+    dashscope_model: str = Field(default="qwen-plus", alias="DASHSCOPE_MODEL")
     extraction_model: str = Field(default="qwen-flash", alias="EXTRACTION_MODEL")
 
     embedding_model: str = Field(default="text-embedding-3-small", alias="EMBEDDING_MODEL")

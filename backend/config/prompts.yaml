@@ -1,64 +1,64 @@
 prompts:
-  # 路由判断提示词
   router:
     system: |
       You are an expert at routing a user question to perform vector search or graph query.
       
-      The vector store contains documents related to the content.
-      The graph database contains Movie and Person data with relationships:
-      - (Person)-[:ACTED_IN]->(Movie)
-      - (Person)-[:DIRECTED]->(Movie)
-      - (Person)-[:PRODUCED]->(Movie)
-      - (Person)-[:WROTE]->(Movie)
-      - (Person)-[:REVIEWED]->(Movie)
-      - (Person)-[:FOLLOWS]->(Person)
+      The vector store contains medical documents related to diseases, symptoms, drugs, treatments, and medical research.
+      The graph database contains medical entities with relationships:
+      - (Disease)-[:HAS_SYMPTOM]->(Symptom)
+      - (Disease)-[:CAUSED_BY]->(Disease)
+      - (Disease)-[:TREATED_BY]->(Treatment)
+      - (Disease)-[:BELONGS_TO]->(Department)
+      - (Drug)-[:DRUG_FOR]->(Disease)
+      - (Drug)-[:SIDE_EFFECT]->(Symptom)
+      - (Symptom)-[:INDICATES]->(Disease)
+      - (Anatomy)-[:PART_OF]->(Anatomy)
       
       Use vector search when the user asks about:
-      - Similar documents, related content
-      - Finding documents by topic or keyword
-      - Semantic similarity searches
+      - Detailed medical knowledge, research findings
+      - Clinical guidelines, treatment protocols
+      - Medical literature, articles, papers
+      - Comprehensive explanations of diseases or symptoms
       
       Use graph query when the user asks about:
-      - Movies, actors, directors
-      - Who acted in which movie
-      - Who directed a movie
-      - Co-actors, collaborations
-      - Movie release years, counts, statistics
-      - Path finding between entities
-      - Structured queries about the knowledge graph
+      - Relationships between diseases and symptoms
+      - Which drugs treat specific diseases
+      - Side effects of medications
+      - Which department treats a disease
+      - Anatomy relationships
+      - Disease-cause relationships
       
       Example questions for Vector Search:
-      - Find articles about machine learning
-      - Find documents similar to this one
-      - What documents discuss Python programming?
+      - What are the latest treatments for diabetes?
+      - Explain the pathophysiology of hypertension
+      - Find research papers about COVID-19 vaccines
+      - What are the diagnostic criteria for asthma?
       
       Example questions for Graph Query:
-      - Keanu Reeves演过哪些电影
-      - The Matrix的演员有哪些
-      - 谁导演了Inception
-      - Tom Hanks和谁合作过
-      - 2000年以后有哪些电影
-      
+      - What symptoms are associated with diabetes?
+      - What drugs are used to treat hypertension?
+      - What side effects does aspirin have?
+      - Which department treats heart disease?
+      - What causes pneumonia?
+
     human: "Question: {question}"
 
-  # 查询分解提示词
   decomposer:
     system: |
       You are an expert at converting user questions into sub-queries.
       Given a user question, break it down into 2 distinct subqueries that
       need to be answered in order to answer the original question.
       
-      For vector search: Focus on finding relevant documents
-      For graph query: Focus on entity relationships and structure
+      For vector search: Focus on finding relevant medical documents
+      For graph query: Focus on medical entity relationships and structure
       
       Output format: A list of sub-questions.
 
     human: "Question: {question}"
 
-  # Cypher生成提示词
   cypher_generator:
     system: |
-      Task: Generate Cypher statement to query a graph database.
+      Task: Generate Cypher statement to query a medical knowledge graph database.
       
       Instructions:
       - Use only the provided relationship types and properties in the schema
@@ -73,44 +73,42 @@ prompts:
 
     human: "Question: {question}"
 
-  # 问答提示词
   qa:
     system: |
-      You are a helpful assistant that answers questions based on the provided context and your own knowledge.
+      You are a medical expert assistant that answers questions based on the provided context and medical knowledge.
       
       Instructions:
       - First use the context provided to answer the question
-      - If the context contains relevant information, use it and cite it
-      - If the context is limited or empty, use your own knowledge to provide a helpful answer
+      - If the context contains relevant information, use it
+      - If the context is limited or empty, use your own medical knowledge to provide a helpful answer
       - Always be concise, accurate, and informative
-      - When answering about movies, actors, or people, provide interesting details like birth year, filmography, awards, etc.
+      - When answering about medical topics, provide details like symptoms, treatments, risk factors, etc.
       - Respond in the same language as the question
       - Do NOT use any markdown formatting (no **, #, -, etc.); output plain text only
       - Do NOT use filler phrases like "根据提供的信息", "据我所知", "如果您需要更多信息", "如果您有其他问题" etc. Just answer directly
       - Do NOT mention where the information comes from; just present the answer directly
+      - For medical advice, always recommend consulting a qualified healthcare professional
 
     human: |
       Question: {question}
       
       Context from database: {context}
 
-  # 实体提取提示词
   entity_extraction:
     system: |
-      You are an expert at extracting entities and relationships from text.
+      You are a medical entity extraction expert.
       
       Extract:
-      - Entities (people, places, organizations, concepts)
-      - Relationships between entities
+      - Medical entities (Disease, Symptom, Drug, Treatment, Anatomy, Department)
+      - Relationships between medical entities
       
       Output format: JSON with "entities" and "relationships" keys.
 
     human: "Text: {text}"
 
-  # 文档分块提示词
   document_chunking:
     system: |
-      You are an expert at chunking documents into meaningful sections.
+      You are an expert at chunking medical documents into meaningful sections.
       
       Instructions:
       - Create chunks that are self-contained and coherent

@@ -9,6 +9,8 @@ from ..core.neo4j_client import Neo4jClient
 from .document_loader import Document, DocumentLoader
 from .text_splitter import TextChunk
 from .embedding import EmbeddingClient, get_embedding_client
+from ..core.medical_schema import MEDICAL_SCHEMA
+from .medical_processor import MedicalTextProcessor
 
 
 @dataclass
@@ -40,6 +42,7 @@ class KnowledgeGraphBuilder:
     ):
         self.neo4j_client = neo4j_client
         self.embedding_client = embedding_client
+        self.medical_processor = MedicalTextProcessor()
 
     def _get_neo4j_client(self) -> Neo4jClient:
         if self.neo4j_client is None:
@@ -75,6 +78,11 @@ class KnowledgeGraphBuilder:
             "entities_extracted": 0,
             "relationships_created": 0,
         }
+
+        # 如果是医疗领域，进行预处理
+        settings = get_settings()
+        if settings.domain == "medical":
+            document = self.medical_processor.process_document(document)
 
         # 创建文档节点
         self._create_document_node(document)
@@ -216,11 +224,28 @@ class KnowledgeGraphBuilder:
             base_url=settings.openai_base_url or "https://api.openai.com/v1",
         )
 
-        prompt = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    """你是一个实体关系抽取专家。从给定的文本中提取实体和关系。
+        if settings.domain == "medical":
+            system_prompt = f"""你是一个医疗实体关系抽取专家。从给定的文本中提取医疗相关的实体和关系。
+
+请以JSON格式返回，结构如下：
+{{
+  "entities": [
+    {{"name": "实体名", "type": "实体类型", "properties": {{}}}}
+  ],
+  "relationships": [
+    {{"source": "源实体", "target": "目标实体", "type": "关系类型", "properties": {{}}}}
+  ]
+}}
+
+可用的实体类型包括：{", ".join(MEDICAL_SCHEMA['entities'])}
+可用的关系类型包括：{", ".join(MEDICAL_SCHEMA['relationships'])}
+
+实体类型说明：
+{chr(10).join([f"- {k}: {v}" for k, v in MEDICAL_SCHEMA['descriptions'].items()])}
+
+只提取文本中明确提到的医疗实体和关系。只返回JSON，不要有其他解释文字。"""
+        else:
+            system_prompt = """你是一个实体关系抽取专家。从给定的文本中提取实体和关系。
 
 请以JSON格式返回，结构如下：
 {{
@@ -234,8 +259,11 @@ class KnowledgeGraphBuilder:
 
 实体类型可以是：Person, Organization, Location, Product, Concept, System, Database, Framework 等
 关系类型可以是：USES, HAS, WORKS_AT, LOCATED_IN, RELATED_TO 等
-只提取文本中明确提到的实体和关系。只返回JSON，不要有其他解释文字。""",
-                ),
+只提取文本中明确提到的实体和关系。只返回JSON，不要有其他解释文字。"""
+
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system_prompt),
                 ("human", "从以下文本中提取实体和关系：\n\n{text}"),
             ]
         )

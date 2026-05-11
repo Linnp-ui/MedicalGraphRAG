@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     cache_enabled: bool = Field(default=True, alias="CACHE_ENABLED")
     cache_ttl: int = Field(default=3600, alias="CACHE_TTL")
 
+    domain: Literal["general", "medical"] = Field(default="general", alias="DOMAIN")
+
     chunk_size: int = Field(default=1000)
     chunk_overlap: int = Field(default=200)
     split_strategy: str = Field(default="hybrid")

@@ -1,0 +1,106 @@
+{
+  "load_tests": {
+    "基准负载测试 (10用户)": {
+      "total_requests": 58,
+      "successful_requests": 55,
+      "failed_requests": 3,
+      "error_rate": 0.05172413793103448,
+      "response_time": {
+        "min": 326.2414999999237,
+        "max": 30371.794099999534,
+        "mean": 12612.21781551721,
+        "median": 11614.637149999908,
+        "std_dev": 7556.726585532927,
+        "p50": 11670.113399999536,
+        "p90": 22752.26240000029,
+        "p95": 30163.50650000004,
+        "p99": 30371.794099999534
+      },
+      "throughput_rps": 0.646586146498085,
+      "duration_seconds": 89.70189094543457
+    },
+    "中等负载测试 (30用户)": {
+      "total_requests": 303,
+      "successful_requests": 15,
+      "failed_requests": 288,
+      "error_rate": 0.9504950495049505,
+      "response_time": {
+        "min": 36.32740000011836,
+        "max": 30959.84380000027,
+        "mean": 30267.537246534648,
+        "median": 30937.331900000572,
+        "std_dev": 3240.2290853136665,
+        "p50": 30937.331900000572,
+        "p90": 30950.050999999803,
+        "p95": 30951.2279999999,
+        "p99": 30954.926200000045
+      },
+      "throughput_rps": 0.939312918020548,
+      "duration_seconds": 322.57620882987976
+    },
+    "峰值负载测试 (50用户)": {
+      "total_requests": 252,
+      "successful_requests": 22,
+      "failed_requests": 230,
+      "error_rate": 0.9126984126984127,
+      "response_time": {
+        "min": 19.070100000135426,
+        "max": 30990.440800000215,
+        "mean": 29501.940859920614,
+        "median": 30961.376850000306,
+        "std_dev": 5152.370124060586,
+        "p50": 30961.426100000608,
+        "p90": 30981.73609999958,
+        "p95": 30985.546099999738,
+        "p99": 30990.296099999796
+      },
+      "throughput_rps": 1.5305671126533797,
+      "duration_seconds": 164.64485478401184
+    }
+  },
+  "fault_tests": [
+    {
+      "fault_type": "timeout",
+      "timeout_seconds": 1.0,
+      "status_code": 200,
+      "response_time_ms": 6.617799999730778,
+      "success": true
+    },
+    {
+      "fault_type": "connection_failure",
+      "status_code": 0,
+      "response_time_ms": 2295.5926000004183,
+      "success": false,
+      "error": "Cannot connect to host localhost:9999 ssl:default [远程计算机拒绝网络连接。]"
+    },
+    {
+      "fault_type": "high_load",
+      "duration_seconds": 5,
+      "target_rps": 50,
+      "statistics": {
+        "total_requests": 250,
+        "successful_requests": 59,
+        "failed_requests": 191,
+        "error_rate": 0.764,
+        "response_time": {
+          "min": 257.68090000019583,
+          "max": 494.7578999999678,
+          "mean": 399.03166760002205,
+          "median": 389.4873000003827,
+          "std_dev": 54.19376121503962,
+          "p50": 389.59630000044854,
+          "p90": 487.8577999998015,
+          "p95": 491.17589999968914,
+          "p99": 494.091099999423
+        },
+        "throughput_rps": 30.413680773066982,
+        "duration_seconds": 8.219985008239746
+      }
+    }
+  ],
+  "criteria": {
+    "max_response_time_ms": 500.0,
+    "max_error_rate": 0.001,
+    "min_throughput_rps": 10.0
+  }
+}

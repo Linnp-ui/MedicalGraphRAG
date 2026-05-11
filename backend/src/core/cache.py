@@ -1,6 +1,7 @@
 import hashlib
 import json
 import time
+import threading
 from collections import OrderedDict
 from typing import Any, Callable, Dict, Optional, Tuple
 from functools import wraps
@@ -11,52 +12,56 @@ from .config import get_settings
 
 
 class LRUCache:
-    """Simple LRU cache implementation with TTL support"""
+    """Thread-safe LRU cache implementation with TTL support"""
 
     def __init__(self, max_size: int = 1000):
-        # Store as {key: (value, expiration_time)}
         self.cache: OrderedDict[str, Tuple[Any, float]] = OrderedDict()
         self.max_size = max_size
+        self._lock = threading.Lock()
 
     def get(self, key: str) -> Optional[Any]:
         """Get value from cache if not expired"""
-        if key in self.cache:
-            value, expires_at = self.cache[key]
-            # Check if expired
-            if time.time() > expires_at:
-                del self.cache[key]
-                return None
-                
-            self.cache.move_to_end(key)
-            return value
-        return None
+        with self._lock:
+            if key in self.cache:
+                value, expires_at = self.cache[key]
+                if time.time() > expires_at:
+                    del self.cache[key]
+                    return None
+                    
+                self.cache.move_to_end(key)
+                return value
+            return None
 
     def set(self, key: str, value: Any, ttl: int = 3600):
         """Set value in cache with TTL"""
-        if key in self.cache:
-            self.cache.move_to_end(key)
-        
-        expires_at = time.time() + ttl
-        self.cache[key] = (value, expires_at)
-        
-        if len(self.cache) > self.max_size:
-            self.cache.popitem(last=False)
+        with self._lock:
+            if key in self.cache:
+                self.cache.move_to_end(key)
+            
+            expires_at = time.time() + ttl
+            self.cache[key] = (value, expires_at)
+            
+            if len(self.cache) > self.max_size:
+                self.cache.popitem(last=False)
 
     def clear(self):
         """Clear all cache"""
-        self.cache.clear()
+        with self._lock:
+            self.cache.clear()
 
     def __contains__(self, key: str) -> bool:
-        if key in self.cache:
-            _, expires_at = self.cache[key]
-            if time.time() <= expires_at:
-                return True
-            else:
-                del self.cache[key]
-        return False
+        with self._lock:
+            if key in self.cache:
+                _, expires_at = self.cache[key]
+                if time.time() <= expires_at:
+                    return True
+                else:
+                    del self.cache[key]
+            return False
 
     def __len__(self) -> int:
-        return len(self.cache)
+        with self._lock:
+            return len(self.cache)
 
 
 class QueryCache:
@@ -127,6 +132,8 @@ def cached(cache_instance_factory: Callable[[], QueryCache]):
 
 # Singleton cache instances
 _query_cache: Optional[QueryCache] = None
+_graph_data_cache: Optional[QueryCache] = None
+_search_cache: Optional[QueryCache] = None
 
 
 def get_query_cache() -> QueryCache:
@@ -139,3 +146,37 @@ def get_query_cache() -> QueryCache:
             ttl=settings.cache_ttl,
         )
     return _query_cache
+
+
+def get_graph_data_cache() -> QueryCache:
+    """Get singleton graph data cache for /graph/data endpoint"""
+    global _graph_data_cache
+    if _graph_data_cache is None:
+        _graph_data_cache = QueryCache(
+            max_size=100,
+            ttl=300,  # 5 minutes
+        )
+    return _graph_data_cache
+
+
+def get_search_cache() -> QueryCache:
+    """Get singleton search cache for /graph/search endpoint"""
+    global _search_cache
+    if _search_cache is None:
+        _search_cache = QueryCache(
+            max_size=500,
+            ttl=600,  # 10 minutes
+        )
+    return _search_cache
+
+
+def clear_all_caches():
+    """Clear all cache instances"""
+    global _query_cache, _graph_data_cache, _search_cache
+    if _query_cache:
+        _query_cache.clear()
+    if _graph_data_cache:
+        _graph_data_cache.clear()
+    if _search_cache:
+        _search_cache.clear()
+    logger.info("All caches cleared")

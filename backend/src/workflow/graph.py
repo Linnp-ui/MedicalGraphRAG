@@ -12,6 +12,15 @@ from .nodes import (
     generate_answer,
     handle_error,
 )
+from ..core.circuit_breaker import get_circuit_breaker
+
+
+def should_degrade(state: GraphState) -> bool:
+    """Check if service should degrade based on circuit breaker states"""
+    llm_qa_breaker = get_circuit_breaker("llm_qa")
+    llm_cypher_breaker = get_circuit_breaker("llm_cypher")
+    
+    return llm_qa_breaker.state.name == "OPEN" or llm_cypher_breaker.state.name == "OPEN"
 
 
 def create_workflow() -> StateGraph:
@@ -91,9 +100,24 @@ def run_workflow(question: str, history: List[Dict[str, str]] | None = None) -> 
     }
 
     try:
+        if should_degrade(initial_state):
+            logger.warning("Service in degraded mode, using simplified response")
+            return _degraded_response(question, initial_state)
+        
         result = workflow.invoke(initial_state)
         return result
     except Exception as e:
         logger.error(f"Workflow execution failed: {e}")
         initial_state["error"] = str(e)
-        return initial_state
+        return _degraded_response(question, initial_state)
+
+
+def _degraded_response(question: str, state: GraphState) -> dict:
+    """Generate a degraded response when service is unavailable"""
+    state["answer"] = (
+        "抱歉，当前服务处于高负载状态，暂时无法提供完整回答。\n"
+        "请稍后重试，或者尝试简化您的问题。\n\n"
+        "如果问题持续存在，请联系系统管理员。"
+    )
+    state["routing"] = "degraded"
+    return state

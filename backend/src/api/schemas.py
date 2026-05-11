@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 import re
 
 
@@ -59,7 +59,7 @@ class HealthResponse(BaseModel):
 
 
 class SchemaResponse(BaseModel):
-    schema: str
+    schema_text: str = Field(..., serialization_alias="schema")
     node_labels: List[str]
     relationship_types: List[str]
 
@@ -85,8 +85,7 @@ class GraphEdge(BaseModel):
     type: str
     properties: Optional[Dict[str, Any]] = None
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class GraphStats(BaseModel):
@@ -129,3 +128,12 @@ class QueryResultRequest(BaseModel):
     query: str
     node_ids: List[str]
     max_depth: int = Field(default=2, ge=1, le=3)
+
+    @field_validator("node_ids")
+    @classmethod
+    def validate_node_ids(cls, value: List[str]) -> List[str]:
+        if not value:
+            raise ValueError("node_ids cannot be empty")
+        if any(not node_id.isdigit() for node_id in value):
+            raise ValueError("node_ids must contain only numeric strings")
+        return value

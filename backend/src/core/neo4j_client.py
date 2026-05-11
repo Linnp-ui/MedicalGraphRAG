@@ -1,6 +1,7 @@
 import time
 from contextlib import contextmanager
 from typing import Any, Generator, Optional
+import re
 
 from neo4j import (
     AsyncDriver,
@@ -16,6 +17,7 @@ from .config import get_settings
 # Schema cache: (schema_string, expires_at_timestamp)
 _schema_cache: tuple[str, float] | None = None
 _SCHEMA_CACHE_TTL = 300  # 5 minutes
+_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,127}$")
 
 
 class Neo4jClient:
@@ -26,6 +28,11 @@ class Neo4jClient:
         self._driver: Optional[Driver] = None
         self._async_driver: Optional[AsyncDriver] = None
 
+    def _normalize_identifier(self, identifier: str, field_name: str) -> str:
+        if not _IDENTIFIER_PATTERN.fullmatch(identifier):
+            raise ValueError(f"Invalid {field_name}")
+        return identifier
+
     def _get_driver(self) -> Driver:
         """Get or create Neo4j driver"""
         if self._driver is None:
@@ -35,9 +42,11 @@ class Neo4jClient:
                     self.settings.neo4j_username,
                     self.settings.neo4j_password,
                 ),
-                max_connection_lifetime=3600,
-                max_connection_pool_size=50,
-                connection_acquisition_timeout=60,
+                max_connection_lifetime=1800,
+                max_connection_pool_size=100,
+                connection_acquisition_timeout=30,
+                connection_timeout=30,
+                max_transaction_retry_time=30,
             )
             logger.info(f"Neo4j driver created: {self.settings.neo4j_uri}")
         return self._driver
@@ -51,9 +60,11 @@ class Neo4jClient:
                     self.settings.neo4j_username,
                     self.settings.neo4j_password,
                 ),
-                max_connection_lifetime=3600,
-                max_connection_pool_size=50,
-                connection_acquisition_timeout=60,
+                max_connection_lifetime=1800,
+                max_connection_pool_size=100,
+                connection_acquisition_timeout=30,
+                connection_timeout=30,
+                max_transaction_retry_time=30,
             )
             logger.info(f"Async Neo4j driver created: {self.settings.neo4j_uri}")
         return self._async_driver
@@ -164,8 +175,9 @@ class Neo4jClient:
     ) -> dict[str, Any]:
         """获取图谱数据"""
         if node_label:
+            safe_node_label = self._normalize_identifier(node_label, "node_label")
             node_query = f"""
-            MATCH (n:{node_label})
+            MATCH (n:`{safe_node_label}`)
             WITH n, COUNT {{ (n)--() }} as degree
             RETURN n, id(n) as node_id, degree, labels(n) as labels
             ORDER BY degree DESC
@@ -273,8 +285,9 @@ class Neo4jClient:
         searchable_props = ['name', 'title', 'description', 'text', 'content', 'label', 'type']
         
         if node_label:
+            safe_node_label = self._normalize_identifier(node_label, "node_label")
             search_query = f"""
-            MATCH (n:{node_label})
+            MATCH (n:`{safe_node_label}`)
             WHERE ANY(prop IN $searchable_props 
                       WHERE prop IN keys(n) 
                       AND n[prop] IS NOT NULL 
@@ -425,8 +438,11 @@ class Neo4jClient:
     ) -> dict[str, Any]:
         """获取节点邻居"""
         if relationship_type:
+            safe_relationship_type = self._normalize_identifier(
+                relationship_type, "relationship_type"
+            )
             neighbor_query = f"""
-            MATCH path = (n)-[r:{relationship_type}*1..{depth}]-(m)
+            MATCH path = (n)-[r:`{safe_relationship_type}`*1..{depth}]-(m)
             WHERE id(n) = $node_id
             UNWIND nodes(path) as node
             WITH DISTINCT node, id(node) as node_id, labels(node) as node_labels
@@ -461,7 +477,7 @@ class Neo4jClient:
             
             if relationship_type:
                 edge_query = f"""
-                MATCH path = (n)-[r:{relationship_type}*1..{depth}]-(m)
+                MATCH path = (n)-[r:`{safe_relationship_type}`*1..{depth}]-(m)
                 WHERE id(n) = $node_id
                 UNWIND relationships(path) as rel
                 WITH DISTINCT rel, id(rel) as edge_id, id(startNode(rel)) as from_id, 

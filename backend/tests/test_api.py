@@ -87,6 +87,8 @@ class TestGraphAPI:
         response = client.get("/api/v1/graph/data?limit=100")
         assert response.status_code == 200
         mock_client.get_graph_data.assert_called_once()
+        _, kwargs = mock_client.get_graph_data.call_args
+        assert kwargs["limit"] == 100
     
     @patch('src.api.routes.get_neo4j_client')
     def test_get_graph_data_with_node_label(self, mock_get_client):
@@ -120,6 +122,16 @@ class TestGraphAPI:
         
         response = client.get("/api/v1/graph/data")
         assert response.status_code == 500
+
+    @patch('src.api.routes.get_neo4j_client')
+    def test_get_graph_data_invalid_node_label(self, mock_get_client):
+        """测试非法节点标签被拒绝"""
+        mock_client = Mock()
+        mock_client.get_graph_data.side_effect = ValueError("Invalid node_label")
+        mock_get_client.return_value = mock_client
+
+        response = client.get("/api/v1/graph/data?node_label=Person;MATCH")
+        assert response.status_code == 400
     
     @patch('src.api.routes.get_neo4j_client')
     def test_search_nodes_success(self, mock_get_client):
@@ -161,6 +173,8 @@ class TestGraphAPI:
         
         response = client.get("/api/v1/graph/search?query=用户&limit=10")
         assert response.status_code == 200
+        _, kwargs = mock_client.search_nodes.call_args
+        assert kwargs["limit"] == 10
     
     @patch('src.api.routes.get_neo4j_client')
     def test_get_node_detail_success(self, mock_get_client):
@@ -229,6 +243,18 @@ class TestGraphAPI:
         
         response = client.get("/api/v1/graph/node/1/neighbors?depth=2")
         assert response.status_code == 200
+        _, kwargs = mock_client.get_node_neighbors.call_args
+        assert kwargs["depth"] == 2
+
+    @patch('src.api.routes.get_neo4j_client')
+    def test_get_node_neighbors_invalid_relationship_type(self, mock_get_client):
+        """测试非法关系类型被拒绝"""
+        mock_client = Mock()
+        mock_client.get_node_neighbors.side_effect = ValueError("Invalid relationship_type")
+        mock_get_client.return_value = mock_client
+
+        response = client.get("/api/v1/graph/node/1/neighbors?relationship_type=KNOWS;DELETE")
+        assert response.status_code == 400
     
     @patch('src.api.routes.get_neo4j_client')
     def test_get_query_result_graph_success(self, mock_get_client):
@@ -394,7 +420,7 @@ class TestEdgeCases:
     
     @patch('src.api.routes.get_neo4j_client')
     def test_large_limit_value(self, mock_get_client):
-        """测试过大的limit值"""
+        """测试过大的limit值被参数校验拒绝"""
         mock_client = Mock()
         mock_client.get_graph_data.return_value = {
             "nodes": [],
@@ -404,17 +430,13 @@ class TestEdgeCases:
         mock_get_client.return_value = mock_client
         
         response = client.get("/api/v1/graph/data?limit=10000")
-        assert response.status_code == 200
+        assert response.status_code == 422
     
     @patch('src.api.routes.get_neo4j_client')
     def test_invalid_node_id_format(self, mock_get_client):
         """测试无效的节点ID格式"""
-        mock_client = Mock()
-        mock_client.get_node_detail.side_effect = ValueError("Invalid ID")
-        mock_get_client.return_value = mock_client
-        
         response = client.get("/api/v1/graph/node/invalid_id")
-        assert response.status_code == 500
+        assert response.status_code == 400
     
     @patch('src.api.routes.get_neo4j_client')
     def test_special_characters_in_search(self, mock_get_client):
@@ -425,6 +447,18 @@ class TestEdgeCases:
         
         response = client.get("/api/v1/graph/search?query=<script>alert('xss')</script>")
         assert response.status_code == 200
+
+    def test_query_result_graph_invalid_node_ids(self):
+        """测试查询结果图谱接口拒绝非法节点ID"""
+        response = client.post(
+            "/api/v1/graph/query-result",
+            json={
+                "query": "张三认识谁？",
+                "node_ids": ["1", "invalid"],
+                "max_depth": 2
+            }
+        )
+        assert response.status_code == 422
     
     @patch('src.api.routes.get_neo4j_client')
     def test_unicode_search_query(self, mock_get_client):

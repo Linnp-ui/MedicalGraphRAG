@@ -229,15 +229,16 @@ describe('GraphView', () => {
       
       await waitFor(() => {
         expect(screen.getByText('当前节点数:')).toBeInTheDocument()
-        expect(screen.getByText('2')).toBeInTheDocument()
+        expect(screen.getByText('总节点数:').nextElementSibling).toHaveTextContent('2')
         expect(screen.getByText('当前关系数:')).toBeInTheDocument()
-        expect(screen.getByText('1')).toBeInTheDocument()
+        expect(screen.getByText('总关系数:').nextElementSibling).toHaveTextContent('1')
       }, { timeout: 3000 })
     })
   })
 
   describe('刷新功能', () => {
     it('应该重新加载数据当点击刷新按钮时', async () => {
+      const user = userEvent.setup()
       const mockData = {
         nodes: [],
         edges: [],
@@ -253,9 +254,11 @@ describe('GraphView', () => {
       })
 
       const refreshButton = screen.getByText('刷新')
-      fireEvent.click(refreshButton)
+      await user.click(refreshButton)
 
-      expect(api.api.getGraphData).toHaveBeenCalledTimes(2)
+      await waitFor(() => {
+        expect(api.api.getGraphData).toHaveBeenCalledTimes(2)
+      })
     })
   })
 
@@ -272,6 +275,7 @@ describe('GraphView', () => {
     })
 
     it('应该允许重试当发生错误时', async () => {
+      const user = userEvent.setup()
       const mockData = {
         nodes: [],
         edges: [],
@@ -289,7 +293,7 @@ describe('GraphView', () => {
       }, { timeout: 3000 })
 
       const refreshButton = screen.getByText('刷新')
-      fireEvent.click(refreshButton)
+      await user.click(refreshButton)
 
       await waitFor(() => {
         expect(screen.getByText('知识图谱')).toBeInTheDocument()
@@ -346,8 +350,8 @@ describe('GraphView', () => {
       render(<GraphView />)
       
       await waitFor(() => {
-        expect(screen.getByText('1000')).toBeInTheDocument()
-        expect(screen.getByText('500')).toBeInTheDocument()
+        expect(screen.getByText('总节点数:').nextElementSibling).toHaveTextContent('1000')
+        expect(screen.getByText('总关系数:').nextElementSibling).toHaveTextContent('500')
       }, { timeout: 5000 })
     })
   })

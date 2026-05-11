@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Network } from 'vis-network/standalone';
 import { DataSet } from 'vis-data';
+import type { Data, Edge, IdType, Node, Options } from 'vis-network/standalone';
 import type { GraphNode, GraphEdge } from '../../types/graph';
 import { getNodeColor, getEdgeColor, calculateNodeSize } from '../../lib/graphConfig';
 import { ContextMenu } from './ContextMenu';
@@ -45,12 +46,14 @@ export function GraphCanvas({
 
   onNodeClickRef.current = onNodeClick;
 
+  const toNodeId = (value: IdType): string => String(value);
+
   useEffect(() => {
     if (!containerRef.current || nodes.length === 0) return;
 
     const maxDegree = Math.max(...nodes.map(n => n.degree || 0), 1);
 
-    const visNodes = new DataSet(
+    const visNodes = new DataSet<Node>(
       nodes.map(node => {
         const isHighlighted = highlightedNodes?.has(node.id);
         return {
@@ -77,14 +80,14 @@ export function GraphCanvas({
           font: {
             size: isHighlighted ? 16 : 14,
             color: '#1F2937',
-            bold: isHighlighted
+            bold: isHighlighted ? '16px arial #1F2937' : undefined
           },
           borderWidth: isHighlighted ? 3 : 2
         };
       })
     );
 
-    const visEdges = new DataSet(
+    const visEdges = new DataSet<Edge>(
       edges.map(edge => {
         const isHighlighted = highlightedNodes?.has(edge.from) && highlightedNodes?.has(edge.to);
         return {
@@ -113,7 +116,7 @@ export function GraphCanvas({
       })
     );
 
-    const data = {
+    const data: Data = {
       nodes: visNodes,
       edges: visEdges
     };
@@ -123,7 +126,7 @@ export function GraphCanvas({
     const springLength = nodeCount > 100 ? 200 : nodeCount > 50 ? 150 : 100;
     const centralGravity = nodeCount > 100 ? 0.1 : nodeCount > 50 ? 0.2 : 0.3;
 
-    const options = {
+    const options: Options = {
       physics: {
         enabled: true,
         barnesHut: {
@@ -183,7 +186,7 @@ export function GraphCanvas({
 
     networkRef.current.on('click', (params: any) => {
       if (params.nodes.length > 0 && onNodeClickRef.current) {
-        onNodeClickRef.current(params.nodes[0]);
+        onNodeClickRef.current(toNodeId(params.nodes[0]));
       }
     });
 
@@ -192,14 +195,15 @@ export function GraphCanvas({
       
       const nodeId = networkRef.current?.getNodeAt(params.pointer.DOM);
       if (nodeId) {
-        const node = nodes.find(n => n.id === nodeId);
+        const normalizedNodeId = toNodeId(nodeId);
+        const node = nodes.find(n => n.id === normalizedNodeId);
         if (node) {
           setContextMenu({
             visible: true,
             x: params.event.pageX,
             y: params.event.pageY,
-            nodeId: nodeId,
-            nodeName: node.properties.name || node.properties.title || nodeId,
+            nodeId: normalizedNodeId,
+            nodeName: node.properties.name || node.properties.title || normalizedNodeId,
             nodeLabel: node.label
           });
         }

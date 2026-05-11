@@ -2,7 +2,7 @@ import os
 import time
 import threading
 from typing import List
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
 from loguru import logger
 import tempfile
 
@@ -21,6 +21,7 @@ from .schemas import (
 )
 from ..core.neo4j_client import get_neo4j_client
 from ..core.config import get_settings
+from ..core.cache import get_graph_data_cache, get_search_cache
 from ..retrieval.vector_retriever import VectorRetriever
 from ..retrieval.graph_retriever import GraphRetriever
 from ..retrieval.hybrid import HybridRetriever
@@ -47,6 +48,12 @@ def _get_memory_mb() -> float:
         return process.memory_info().rss / 1024 / 1024
     except Exception:
         return 0.0
+
+
+def _parse_node_id(node_id: str) -> int:
+    if not node_id.isdigit():
+        raise HTTPException(status_code=400, detail="node_id must be a numeric string")
+    return int(node_id)
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -120,7 +127,7 @@ async def get_schema():
         relationship_types = rels_result[0].get("types", []) if rels_result else []
 
         return SchemaResponse(
-            schema=schema,
+            schema_text=schema,
             node_labels=node_labels,
             relationship_types=relationship_types,
         )
@@ -293,19 +300,30 @@ async def hybrid_search(query: str, alpha: float = 0.5):
 
 @router.get("/graph/data", response_model=GraphDataResponse)
 async def get_graph_data(
-    node_label: str = None,
-    limit: int = 500,
-    offset: int = 0
+    node_label: str | None = Query(default=None, max_length=128),
+    limit: int = Query(default=500, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
 ):
     """获取图谱数据"""
+    cache_key = f"{node_label or 'all'}:{limit}:{offset}"
+    cache = get_graph_data_cache()
+    
+    cached_result = cache.cache.get(cache_key)
+    if cached_result:
+        logger.debug(f"Cache hit for graph data: {cache_key}")
+        return GraphDataResponse(**cached_result)
+    
     try:
         client = get_neo4j_client()
         data = client.get_graph_data(
             node_label=node_label,
-            limit=min(limit, 1000),
-            offset=offset
+            limit=limit,
+            offset=offset,
         )
+        cache.cache.set(cache_key, data, ttl=300)
         return GraphDataResponse(**data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to get graph data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -313,22 +331,34 @@ async def get_graph_data(
 
 @router.get("/graph/search", response_model=GraphSearchResponse)
 async def search_nodes(
-    query: str,
-    node_label: str = None,
-    limit: int = 20
+    query: str = Query(..., min_length=0, max_length=2000),
+    node_label: str | None = Query(default=None, max_length=128),
+    limit: int = Query(default=20, ge=1, le=100),
 ):
     """搜索节点"""
+    cache_key = f"{query}:{node_label or 'all'}:{limit}"
+    cache = get_search_cache()
+    
+    cached_result = cache.cache.get(cache_key)
+    if cached_result:
+        logger.debug(f"Cache hit for search: {cache_key}")
+        return GraphSearchResponse(**cached_result)
+    
     try:
         client = get_neo4j_client()
         results = client.search_nodes(
             search_text=query,
             node_label=node_label,
-            limit=min(limit, 100)
+            limit=limit,
         )
-        return GraphSearchResponse(
-            results=results,
-            total=len(results)
-        )
+        response_data = {
+            "results": results,
+            "total": len(results),
+        }
+        cache.cache.set(cache_key, response_data, ttl=600)
+        return GraphSearchResponse(**response_data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to search nodes: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -338,6 +368,7 @@ async def search_nodes(
 async def get_node_detail(node_id: str):
     """获取节点详情"""
     try:
+        _parse_node_id(node_id)
         client = get_neo4j_client()
         data = client.get_node_detail(node_id)
         if not data:
@@ -353,18 +384,21 @@ async def get_node_detail(node_id: str):
 @router.get("/graph/node/{node_id}/neighbors")
 async def get_node_neighbors(
     node_id: str,
-    depth: int = 1,
-    relationship_type: str = None
+    depth: int = Query(default=1, ge=1, le=3),
+    relationship_type: str | None = Query(default=None, max_length=128),
 ):
     """获取节点邻居"""
     try:
+        _parse_node_id(node_id)
         client = get_neo4j_client()
         data = client.get_node_neighbors(
             node_id=node_id,
-            depth=min(depth, 3),
-            relationship_type=relationship_type
+            depth=depth,
+            relationship_type=relationship_type,
         )
         return data
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to get node neighbors: {e}")
         raise HTTPException(status_code=500, detail=str(e))

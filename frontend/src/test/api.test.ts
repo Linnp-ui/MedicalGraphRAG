@@ -143,7 +143,8 @@ describe('APIClient', () => {
     it('should throw error when request fails', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
-        statusText: 'Internal Server Error',
+        status: 500,
+        json: async () => ({ detail: 'Failed to fetch graph data' }),
       } as Response)
 
       await expect(client.getGraphData()).rejects.toThrow('Failed to fetch graph data')

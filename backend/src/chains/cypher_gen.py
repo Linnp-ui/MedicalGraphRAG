@@ -6,6 +6,10 @@ from langchain_core.output_parsers import StrOutputParser
 from loguru import logger
 
 from ..core.config import get_settings, load_prompts
+from ..core.circuit_breaker import get_circuit_breaker
+
+LLM_TIMEOUT_SECONDS = 30
+LLM_MAX_RETRIES = 2
 
 
 class CypherGenerator:
@@ -26,6 +30,8 @@ class CypherGenerator:
                 temperature=0,
                 api_key=self.settings.openai_api_key,
                 base_url=self.settings.openai_base_url or "https://api.openai.com/v1",
+                request_timeout=LLM_TIMEOUT_SECONDS,
+                max_retries=LLM_MAX_RETRIES,
             )
         return self.llm
 
@@ -44,12 +50,10 @@ class CypherGenerator:
         prompts = self._get_prompts()
         cypher_prompt = prompts.get("prompts", {}).get("cypher_generator", {})
 
-        # Build examples string
         examples_str = ""
         if examples:
             examples_str = "\n\n".join([f"Question: {ex}" for ex in examples])
 
-        # Create prompt template
         template = cypher_prompt.get("system", "").format(
             schema=schema,
             examples=examples_str or "No examples available",
@@ -62,14 +66,21 @@ class CypherGenerator:
             ]
         )
 
-        # Generate
         chain = prompt | self._get_llm() | StrOutputParser()
 
+        circuit_breaker = get_circuit_breaker("llm_cypher")
+        
         try:
+            if circuit_breaker.state.name == "OPEN":
+                logger.warning("Circuit breaker OPEN for cypher generation, returning empty")
+                return ""
+            
             cypher = chain.invoke({"question": question})
+            circuit_breaker.record_success()
             logger.info(f"Generated Cypher: {cypher[:100]}...")
             return cypher.strip()
         except Exception as e:
+            circuit_breaker.record_failure()
             logger.error(f"Cypher generation failed: {e}")
             return ""
 

@@ -6,6 +6,10 @@ from langchain_core.output_parsers import StrOutputParser
 from loguru import logger
 
 from ..core.config import get_settings, load_prompts
+from ..core.circuit_breaker import get_circuit_breaker, CircuitOpenError
+
+LLM_TIMEOUT_SECONDS = 30
+LLM_MAX_RETRIES = 2
 
 
 def _compress_history(
@@ -76,6 +80,8 @@ class QAChain:
                 temperature=0,
                 api_key=self.settings.openai_api_key,
                 base_url=self.settings.openai_base_url or "https://api.openai.com/v1",
+                request_timeout=LLM_TIMEOUT_SECONDS,
+                max_retries=LLM_MAX_RETRIES,
             )
         return self.llm
 
@@ -97,7 +103,6 @@ class QAChain:
         system_template = qa_prompt.get("system", "")
         human_template = qa_prompt.get("human", "")
 
-        # Build message list with compressed conversation history
         messages = [("system", system_template)]
 
         if history:
@@ -112,18 +117,32 @@ class QAChain:
 
         chain = prompt | self._get_llm() | StrOutputParser()
 
+        circuit_breaker = get_circuit_breaker("llm_qa")
+        
         try:
+            if circuit_breaker.state.name == "OPEN":
+                logger.warning("Circuit breaker OPEN, returning fallback response")
+                return self._get_fallback_response(question, context)
+            
             answer = chain.invoke(
                 {
                     "question": question,
                     "context": context,
                 }
             )
+            circuit_breaker.record_success()
             logger.info(f"Generated answer: {answer[:100]}...")
             return answer
         except Exception as e:
+            circuit_breaker.record_failure()
             logger.error(f"QA chain failed: {e}")
-            return "Sorry, I couldn't generate an answer."
+            return self._get_fallback_response(question, context)
+
+    def _get_fallback_response(self, question: str, context: str) -> str:
+        """Generate a fallback response when LLM is unavailable"""
+        if context and len(context) > 100:
+            return f"基于检索到的信息，我找到了相关内容，但当前无法生成完整回答。请参考以下信息：\n\n{context[:500]}..."
+        return "抱歉，当前服务繁忙，请稍后重试。"
 
     def answer_with_sources(
         self,

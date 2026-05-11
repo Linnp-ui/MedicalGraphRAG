@@ -37,24 +37,38 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, requests_per_minute: int = 60):
+    def __init__(self, app, requests_per_minute: int = 120):
         super().__init__(app)
         self.requests_per_minute = requests_per_minute
         self._requests: dict = defaultdict(list)
+        self._endpoint_limits = {
+            "/api/v1/query": 30,
+            "/api/v1/graph/search": 60,
+            "/api/v1/graph/data": 60,
+        }
 
     async def dispatch(self, request: Request, call_next):
         client_ip = request.client.host if request.client else "unknown"
-        key = f"{client_ip}:{request.url.path}"
+        endpoint = request.url.path
+        
+        rpm = self.requests_per_minute
+        for pattern, limit in self._endpoint_limits.items():
+            if endpoint.startswith(pattern):
+                rpm = limit
+                break
+        
+        key = f"{client_ip}:{endpoint}"
 
         now = time.time()
         self._requests[key] = [t for t in self._requests[key] if now - t < 60]
 
-        if len(self._requests[key]) >= self.requests_per_minute:
+        if len(self._requests[key]) >= rpm:
             logger.warning(f"Rate limit exceeded for {key}")
             return Response(
-                content='{"error": "Rate limit exceeded"}',
+                content='{"error": "Rate limit exceeded", "retry_after": 60}',
                 status_code=429,
                 media_type="application/json",
+                headers={"Retry-After": "60"}
             )
 
         self._requests[key].append(now)

@@ -1,6 +1,13 @@
 import pytest
+import os
 from src.ingestion.knowledge_fusion import EntityDisambiguator, RelationAligner, KnowledgeFusionEngine
 from src.chains.medical_intent import MedicalIntentClassifier, MedicalIntent
+from src.core.config import get_settings
+
+def has_api_key():
+    """检查是否配置了API密钥"""
+    settings = get_settings()
+    return settings.dashscope_api_key is not None and settings.dashscope_api_key != ""
 
 
 class TestEntityDisambiguator:
@@ -113,7 +120,7 @@ class TestKnowledgeFusionEngine:
 class TestMedicalIntentClassifier:
     """测试医疗意图分类器"""
 
-    @pytest.mark.skip(reason="Requires LLM API access")
+    @pytest.mark.skipif(not has_api_key(), reason="Requires DASHSCOPE_API_KEY")
     def test_classify_disease_query(self):
         classifier = MedicalIntentClassifier()
         
@@ -123,7 +130,7 @@ class TestMedicalIntentClassifier:
         assert result.confidence > 0.7
         assert "高血压" in result.entities
 
-    @pytest.mark.skip(reason="Requires LLM API access")
+    @pytest.mark.skipif(not has_api_key(), reason="Requires DASHSCOPE_API_KEY")
     def test_classify_symptom_query(self):
         classifier = MedicalIntentClassifier()
         
@@ -132,7 +139,7 @@ class TestMedicalIntentClassifier:
         assert result.intent == MedicalIntent.SYMPTOM_QUERY
         assert "头痛" in result.entities
 
-    @pytest.mark.skip(reason="Requires LLM API access")
+    @pytest.mark.skipif(not has_api_key(), reason="Requires DASHSCOPE API_KEY")
     def test_classify_drug_query(self):
         classifier = MedicalIntentClassifier()
         
@@ -141,7 +148,7 @@ class TestMedicalIntentClassifier:
         assert result.intent == MedicalIntent.DRUG_QUERY
         assert "阿司匹林" in result.entities
 
-    @pytest.mark.skip(reason="Requires LLM API access")
+    @pytest.mark.skipif(not has_api_key(), reason="Requires DASHSCOPE_API_KEY")
     def test_classify_diagnosis_assist(self):
         classifier = MedicalIntentClassifier()
         

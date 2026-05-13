@@ -1,4 +1,6 @@
 from typing import Any, Dict, List, Optional
+import hashlib
+from functools import lru_cache
 
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
@@ -7,9 +9,11 @@ from loguru import logger
 
 from ..core.config import get_settings, load_prompts
 from ..core.circuit_breaker import get_circuit_breaker, CircuitOpenError
+from ..core.cache import cached, get_query_cache
 
 LLM_TIMEOUT_SECONDS = 30
 LLM_MAX_RETRIES = 2
+QA_CACHE_SIZE = 1000
 
 
 def _compress_history(
@@ -90,6 +94,7 @@ class QAChain:
             self._prompts = load_prompts()
         return self._prompts
 
+    @cached(get_query_cache)
     def answer(
         self,
         question: str,

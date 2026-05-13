@@ -1,0 +1,328 @@
+{
+  "timestamp": "2026-05-12 20:13:09",
+  "total_tests": 34,
+  "passed": 24,
+  "failed": 10,
+  "overall_score": 72.06,
+  "category_scores": {
+    "文本分割": 100.0,
+    "意图分类": 75.0,
+    "实体消歧": 72.73,
+    "知识融合": 100.0,
+    "实体提取": 83.33,
+    "关系对齐": 50.0
+  },
+  "summary": {
+    "avg_execution_time": 1.088,
+    "slowest_test": "实体提取-疾病识别",
+    "fastest_test": "疾病同义词-高血压变体"
+  },
+  "results": [
+    {
+      "test_name": "疾病同义词-高血压变体",
+      "category": "实体消歧",
+      "passed": true,
+      "expected": "高血压",
+      "actual": "高血压",
+      "score": 1.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "疾病同义词-糖尿病变体",
+      "category": "实体消歧",
+      "passed": false,
+      "expected": "糖尿病",
+      "actual": "II型糖尿病",
+      "score": 0.0,
+      "execution_time": 0.0010106563568115234
+    },
+    {
+      "test_name": "症状同义词-头痛变体",
+      "category": "实体消歧",
+      "passed": false,
+      "expected": "头痛",
+      "actual": "脑袋疼",
+      "score": 0.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "症状同义词-发热变体",
+      "category": "实体消歧",
+      "passed": true,
+      "expected": "发热",
+      "actual": "发热",
+      "score": 1.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "药物同义词-阿司匹林",
+      "category": "实体消歧",
+      "passed": true,
+      "expected": "阿司匹林",
+      "actual": "阿司匹林",
+      "score": 1.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "药物同义词-布洛芬",
+      "category": "实体消歧",
+      "passed": true,
+      "expected": "布洛芬",
+      "actual": "布洛芬",
+      "score": 1.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "症状消歧-咳嗽",
+      "category": "实体消歧",
+      "passed": true,
+      "expected": "咳嗽",
+      "actual": "咳嗽",
+      "score": 1.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "症状消歧-腹泻",
+      "category": "实体消歧",
+      "passed": true,
+      "expected": "腹泻",
+      "actual": "腹泻",
+      "score": 1.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "实体消歧-多表达合并",
+      "category": "实体消歧",
+      "passed": true,
+      "expected": "1",
+      "actual": "合并后1个实体",
+      "score": 1.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "相似度计算-高相似",
+      "category": "实体消歧",
+      "passed": false,
+      "expected": "",
+      "actual": "相似度=0.750",
+      "score": 0.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "相似度计算-低相似",
+      "category": "实体消歧",
+      "passed": true,
+      "expected": "",
+      "actual": "相似度=0.500",
+      "score": 1.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "关系映射-表现为",
+      "category": "关系对齐",
+      "passed": true,
+      "expected": "HAS_SYMPTOM",
+      "actual": "HAS_SYMPTOM",
+      "score": 1.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "关系映射-由...引起",
+      "category": "关系对齐",
+      "passed": true,
+      "expected": "CAUSED_BY",
+      "actual": "CAUSED_BY",
+      "score": 1.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "关系映射-用于治疗",
+      "category": "关系对齐",
+      "passed": true,
+      "expected": "DRUG_FOR",
+      "actual": "DRUG_FOR",
+      "score": 1.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "关系映射-诊断",
+      "category": "关系对齐",
+      "passed": true,
+      "expected": "DIAGNOSED_BY",
+      "actual": "DIAGNOSED_BY",
+      "score": 1.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "关系映射-预防",
+      "category": "关系对齐",
+      "passed": false,
+      "expected": "PREVENTS",
+      "actual": "DRUG_FOR",
+      "score": 0.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "关系验证-有效关系",
+      "category": "关系对齐",
+      "passed": false,
+      "expected": "True",
+      "actual": "False",
+      "score": 0.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "关系验证-无效关系",
+      "category": "关系对齐",
+      "passed": true,
+      "expected": "False",
+      "actual": "False",
+      "score": 1.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "关系验证-另一种有效关系",
+      "category": "关系对齐",
+      "passed": false,
+      "expected": "True",
+      "actual": "False",
+      "score": 0.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "关系验证-药物-疾病",
+      "category": "关系对齐",
+      "passed": false,
+      "expected": "True",
+      "actual": "False",
+      "score": 0.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "关系验证-疾病-并发症",
+      "category": "关系对齐",
+      "passed": false,
+      "expected": "True",
+      "actual": "False",
+      "score": 0.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "知识融合-实体合并",
+      "category": "知识融合",
+      "passed": true,
+      "expected": "高血压和阿司匹林各合并为1个",
+      "actual": "高血压:1个, 阿司匹林:1个",
+      "score": 1.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "知识融合-关系去重",
+      "category": "知识融合",
+      "passed": true,
+      "expected": "关系数量减少（去重）",
+      "actual": "输入5个，输出2个",
+      "score": 1.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "知识融合-ICD10链接",
+      "category": "知识融合",
+      "passed": "I10",
+      "expected": "高血压链接到I10",
+      "actual": "I10",
+      "score": 1.0,
+      "execution_time": 0.0
+    },
+    {
+      "test_name": "医疗文本分割-章节识别",
+      "category": "文本分割",
+      "passed": true,
+      "expected": "识别病史、诊断、治疗等章节",
+      "actual": "识别章节：病史诊断治疗",
+      "score": 1.0,
+      "execution_time": 0.0027010440826416016
+    },
+    {
+      "test_name": "医疗文本分割-块大小合理",
+      "category": "文本分割",
+      "passed": true,
+      "expected": "所有块大小<=1500字符",
+      "actual": "最大块大小: 115",
+      "score": 1.0,
+      "execution_time": 0.0027010440826416016
+    },
+    {
+      "test_name": "医疗文本分割-块数量",
+      "category": "文本分割",
+      "passed": true,
+      "expected": "合理的块数量(3-15)",
+      "actual": "生成6个块",
+      "score": 1.0,
+      "execution_time": 0.0027010440826416016
+    },
+    {
+      "test_name": "意图分类-疾病查询",
+      "category": "意图分类",
+      "passed": true,
+      "expected": "disease_query",
+      "actual": "disease_query",
+      "score": 1.0,
+      "execution_time": 3.590329647064209
+    },
+    {
+      "test_name": "意图分类-症状查询",
+      "category": "意图分类",
+      "passed": false,
+      "expected": "symptom_query",
+      "actual": "diagnosis_assist",
+      "score": 0.0,
+      "execution_time": 2.4830548763275146
+    },
+    {
+      "test_name": "意图分类-药物查询",
+      "category": "意图分类",
+      "passed": true,
+      "expected": "drug_query",
+      "actual": "drug_query",
+      "score": 1.0,
+      "execution_time": 2.468701124191284
+    },
+    {
+      "test_name": "意图分类-诊断辅助",
+      "category": "意图分类",
+      "passed": true,
+      "expected": "diagnosis_assist",
+      "actual": "diagnosis_assist",
+      "score": 1.0,
+      "execution_time": 1.9011411666870117
+    },
+    {
+      "test_name": "实体提取-疾病识别",
+      "category": "实体提取",
+      "passed": true,
+      "expected": "至少识别2个疾病实体",
+      "actual": "识别2个疾病: ['既往有高血压病', '糖尿病']",
+      "score": 1.0,
+      "execution_time": 8.850924491882324
+    },
+    {
+      "test_name": "实体提取-药物识别",
+      "category": "实体提取",
+      "passed": false,
+      "expected": "至少识别2个药物实体",
+      "actual": "识别1个药物: ['阿司匹林']",
+      "score": 0.5,
+      "execution_time": 8.850924491882324
+    },
+    {
+      "test_name": "实体提取-关键实体",
+      "category": "实体提取",
+      "passed": true,
+      "expected": "高血压、糖尿病、阿司匹林",
+      "actual": "高血压:True, 糖尿病:True, 阿司匹林:True",
+      "score": 1.0,
+      "execution_time": 8.850924491882324
+    }
+  ]
+}

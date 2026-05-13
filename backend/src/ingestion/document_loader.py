@@ -271,14 +271,26 @@ class DocumentLoader:
 
             with open(file_path, "rb") as f:
                 reader = PyPDF2.PdfReader(f)
+
+                if reader.is_encrypted:
+                    logger.warning(f"PDF is encrypted, attempting to decrypt: {file_path}")
+                    try:
+                        reader.decrypt("")
+                    except Exception:
+                        pass
+
                 pages = []
                 for page_num, page in enumerate(reader.pages, 1):
-                    text = page.extract_text()
-                    if text and text.strip():
-                        pages.append(text)
+                    try:
+                        text = page.extract_text()
+                        if text and text.strip():
+                            pages.append(text)
+                    except Exception as e:
+                        logger.warning(f"Failed to extract text from page {page_num}: {e}")
+                        continue
 
                 if not pages:
-                    raise ValueError("No text content extracted from PDF")
+                    raise ValueError(f"No text content extracted from PDF: {file_path}")
 
                 content = "\n\n".join(pages)
                 metadata = reader.metadata or {}
@@ -291,12 +303,17 @@ class DocumentLoader:
                         "num_pages": len(reader.pages),
                         "num_text_pages": len(pages),
                         "pdf_metadata": {k: str(v) for k, v in metadata.items() if v},
+                        "is_encrypted": reader.is_encrypted,
                     },
                 )
         except ImportError:
             raise ImportError(
                 "PyPDF2 is required for PDF loading. Install with: pip install PyPDF2"
             )
+        except Exception as e:
+            if "PDF has been corrupted" in str(e) or "malformed" in str(e).lower():
+                raise ValueError(f"Corrupted PDF file: {file_path}. Error: {e}")
+            raise
 
     def _load_docx(self, file_path: Path) -> Document:
         """加载 DOCX 文档
@@ -450,26 +467,29 @@ class DocumentLoader:
         return max(counts, key=counts.get) if counts else ","
 
     def _format_csv(self, headers: List[str], rows: List[List[str]]) -> str:
-        """格式化 CSV 数据为文本
+        """格式化 CSV 数据为文本，保留表格结构
 
         Args:
             headers: CSV 表头
             rows: CSV 数据行
 
         Returns:
-            格式化后的文本内容
+            格式化后的文本内容，保留Markdown表格结构
         """
         content_lines = []
-        if headers:
-            content_lines.append(f"Columns: {', '.join(headers)}")
-            content_lines.append("")
+        if not headers and not rows:
+            return ""
 
-        for i, row in enumerate(rows, 1):
-            if headers and len(headers) == len(row):
-                row_text = ", ".join(f"{h}: {v}" for h, v in zip(headers, row))
-            else:
-                row_text = ", ".join(row)
-            content_lines.append(f"Row {i}: {row_text}")
+        if headers:
+            header_line = f"| {' | '.join(str(h) if h else '' for h in headers)} |"
+            separator_line = f"|{' | '.join(['---'] * len(headers))}|"
+            content_lines.append(header_line)
+            content_lines.append(separator_line)
+
+        for row in rows:
+            padded_row = row + [''] * (len(headers) - len(row)) if headers else row
+            row_line = f"| {' | '.join(str(cell) if cell else '' for cell in padded_row)} |"
+            content_lines.append(row_line)
 
         return "\n".join(content_lines)
 

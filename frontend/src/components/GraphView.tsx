@@ -11,13 +11,16 @@ interface NodeTypeInfo {
 }
 
 const NODE_TYPE_COLORS: Record<string, string> = {
+  'Disease': '#EF4444',
+  'Symptom': '#F97316',
+  'Drug': '#22C55E',
+  'Examination': '#3B82F6',
+  'Treatment': '#8B5CF6',
+  'Anatomy': '#06B6D4',
+  'Department': '#EC4899',
   'Person': '#3B82F6',
   'Document': '#10B981',
   'Organization': '#8B5CF6',
-  'Task': '#F59E0B',
-  'Event': '#EF4444',
-  'Location': '#06B6D4',
-  'Concept': '#EC4899',
   'default': '#6B7280'
 };
 
@@ -193,7 +196,6 @@ export function GraphView() {
   };
 
   const handleNodeClick = async (nodeId: string) => {
-    setCenterNodeId(nodeId);
     if (highlightedNodes.size > 0 && !highlightedNodes.has(nodeId)) {
       setHighlightedNodes(new Set());
     }
@@ -210,8 +212,8 @@ export function GraphView() {
         <div className="bg-white border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">知识图谱</h1>
-              <p className="text-gray-500 mt-1">可视化展示知识图谱结构</p>
+              <h1 className="text-2xl font-bold text-gray-900">医疗知识图谱</h1>
+              <p className="text-gray-500 mt-1">可视化展示医疗知识图谱结构</p>
             </div>
             <button
               onClick={() => loadGraphData()}
@@ -397,6 +399,7 @@ export function GraphView() {
                   onNodeClick={handleNodeClick}
                   onShowRelations={handleShowRelations}
                   highlightedNodes={highlightedNodes}
+                  centerNodeId={centerNodeId}
                 />
                 
                 <div className="absolute bottom-4 right-4 flex gap-2">

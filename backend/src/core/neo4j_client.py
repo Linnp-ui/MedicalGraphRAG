@@ -1,5 +1,5 @@
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, asynccontextmanager
 from typing import Any, Generator, Optional
 import re
 
@@ -79,10 +79,15 @@ class Neo4jClient:
         finally:
             session.close()
 
+    @asynccontextmanager
     async def async_session(self, **kwargs):
         """Get an async Neo4j session"""
         driver = self._get_async_driver()
-        return driver.session(**kwargs)
+        session = driver.session(**kwargs)
+        try:
+            yield session
+        finally:
+            await session.close()
 
     def execute_query(self, query: str, parameters: Optional[dict] = None, **kwargs) -> list[dict]:
         """Execute a Cypher query and return results as list of dicts"""
@@ -94,7 +99,7 @@ class Neo4jClient:
         self, query: str, parameters: Optional[dict] = None, **kwargs
     ) -> list[dict]:
         """Execute a Cypher query asynchronously"""
-        async with await self.async_session() as session:
+        async with self.async_session() as session:
             result = await session.run(query, parameters or {}, **kwargs)
             return [record.data() async for record in result]
 

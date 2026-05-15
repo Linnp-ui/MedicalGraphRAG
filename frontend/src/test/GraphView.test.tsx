@@ -51,7 +51,7 @@ describe('GraphView', () => {
       render(<GraphView />)
       
       await waitFor(() => {
-        expect(screen.getByText('知识图谱')).toBeInTheDocument()
+        expect(screen.getByText('医疗知识图谱')).toBeInTheDocument()
       })
     })
 
@@ -296,7 +296,7 @@ describe('GraphView', () => {
       await user.click(refreshButton)
 
       await waitFor(() => {
-        expect(screen.getByText('知识图谱')).toBeInTheDocument()
+        expect(screen.getByText('医疗知识图谱')).toBeInTheDocument()
       }, { timeout: 3000 })
     })
   })

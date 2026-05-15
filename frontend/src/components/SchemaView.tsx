@@ -29,8 +29,8 @@ export function SchemaView() {
       <div className="max-w-4xl mx-auto space-y-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">图谱结构</h1>
-            <p className="text-slate-500 mt-1">Neo4j 知识图谱结构概览。</p>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">医疗知识图谱结构</h1>
+            <p className="text-slate-500 mt-1">Neo4j 医疗知识图谱结构概览。</p>
           </div>
           <button
             onClick={fetchSchema}
@@ -61,8 +61,8 @@ export function SchemaView() {
                   <Database className="w-5 h-5 text-indigo-600" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-900">节点标签</h2>
-                  <p className="text-sm text-slate-500">图谱中的实体类型</p>
+                  <h2 className="text-lg font-semibold text-slate-900">医疗实体类型</h2>
+                  <p className="text-sm text-slate-500">医疗知识图谱中的实体类型</p>
                 </div>
               </div>
               
@@ -86,8 +86,8 @@ export function SchemaView() {
                   <Network className="w-5 h-5 text-emerald-600" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-900">关系类型</h2>
-                  <p className="text-sm text-slate-500">实体之间的连接关系</p>
+                  <h2 className="text-lg font-semibold text-slate-900">医疗关系类型</h2>
+                  <p className="text-sm text-slate-500">医疗实体之间的连接关系</p>
                 </div>
               </div>
               
@@ -106,7 +106,7 @@ export function SchemaView() {
 
             {/* Raw Schema Output */}
             <div className="md:col-span-2 bg-slate-900 rounded-2xl shadow-sm border border-slate-800 p-6 overflow-hidden">
-              <h2 className="text-sm font-semibold text-slate-300 mb-4 uppercase tracking-wider">原始图谱结构输出</h2>
+              <h2 className="text-sm font-semibold text-slate-300 mb-4 uppercase tracking-wider">原始医疗图谱结构输出</h2>
               <pre className="text-sm text-slate-400 font-mono whitespace-pre-wrap overflow-x-auto">
                 {schema.schema}
               </pre>

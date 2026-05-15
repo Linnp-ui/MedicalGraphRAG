@@ -41,7 +41,7 @@ export function Sidebar({
         <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center">
           <Network className="w-5 h-5 text-indigo-400" />
         </div>
-        <span className="text-xl font-bold text-white tracking-tight">GraphRAG</span>
+        <span className="text-xl font-bold text-white tracking-tight">MedicalGraph</span>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">

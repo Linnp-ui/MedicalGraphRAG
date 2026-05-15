@@ -81,8 +81,8 @@ export function ChatView({ messages, convId, onAddMessage }: ChatViewProps) {
       {/* Header */}
       <div className="px-6 py-4 bg-white border-b border-slate-200 flex justify-between items-center shadow-sm z-10">
         <div>
-          <h2 className="text-lg font-semibold text-slate-800">图谱问答</h2>
-          <p className="text-sm text-slate-500">基于知识图谱回答问题</p>
+          <h2 className="text-lg font-semibold text-slate-800">医疗问答</h2>
+          <p className="text-sm text-slate-500">基于医疗知识图谱回答问题</p>
         </div>
         <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg border border-slate-200">
           <button
@@ -162,7 +162,7 @@ export function ChatView({ messages, convId, onAddMessage }: ChatViewProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="输入关于文档的问题... (Enter 发送，Shift+Enter 换行)"
+            placeholder="输入关于医疗知识的问题... (Enter 发送，Shift+Enter 换行)"
             rows={1}
             className="flex-1 pl-4 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-sm resize-none overflow-hidden"
             disabled={isLoading}

@@ -59,12 +59,16 @@ def _parse_node_id(node_id: str) -> int:
 @router.get("/health", response_model=HealthResponse)
 async def health_check():
     settings = get_settings()
+    logger.info(f"Health check called, NEO4J_URI from settings: {settings.neo4j_uri}")
 
     neo4j_connected = False
     neo4j_pool = None
     try:
         client = get_neo4j_client()
+        logger.info(f"Got Neo4j client: {client}")
+        logger.info(f"Client settings URI: {client.settings.neo4j_uri}")
         neo4j_connected = client.verify_connectivity()
+        logger.info(f"Connectivity verified: {neo4j_connected}")
         if neo4j_connected:
             result = client.execute_query("RETURN 1 as n")
             neo4j_pool = {"connected": 1}

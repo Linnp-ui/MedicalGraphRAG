@@ -1,149 +1,187 @@
-# GraphRAG
+# MedicalGraph - 医疗知识图谱问答系统
+
+基于知识图谱的医疗领域问答系统，整合大语言模型实现智能医疗咨询服务。
 
 ## 项目概述
 
-GraphRAG 是一个基于知识图谱的检索增强生成（RAG）系统，结合了知识图谱和向量检索的优势，提供更准确、更相关的问答能力。
+MedicalGraph 是一个将通用知识图谱系统转型为专业医疗知识图谱的智能问答平台。系统具备医疗实体识别、关系抽取、知识融合和智能问答等核心能力，为用户提供准确、专业的医疗信息服务。
 
-### 技术栈
+## 关键特性
 
-- **后端**：Python 3.11+, FastAPI, LangChain, LangGraph, Neo4j
-- **前端**：React, TypeScript, Vite, Tailwind CSS
+- **医疗实体识别**: 支持疾病、症状、药物、检查、治疗等医疗实体的精准识别
+- **知识图谱构建**: 基于 Neo4j 的医疗知识图谱存储与管理
+- **智能问答引擎**: 结合向量检索与图检索的混合问答机制
+- **医疗意图识别**: 支持诊断辅助、用药咨询、健康建议等多种医疗场景
+- **图谱可视化**: 交互式图谱浏览与节点关系探索
+- **实时响应优化**: 智能缓存机制提升响应速度
 
-## 快速开始
+## 技术架构
 
-### 后端设置
-
-```bash
-# 进入后端目录
-cd graphrag
-
-# 安装依赖
-pip install -e .
-
-# 运行服务器
-python -m src.main
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Frontend (React)                        │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────────────┐   │
+│  │ ChatView    │ │ GraphView   │ │ IngestView          │   │
+│  └──────┬──────┘ └──────┬──────┘ └──────────┬──────────┘   │
+└─────────┼────────────────┼───────────────────┼──────────────┘
+          ▼                ▼                   ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     Backend (FastAPI)                       │
+│  ┌───────────────┐ ┌───────────────┐ ┌─────────────────┐    │
+│  │ API Routes    │ │ Workflow      │ │ Retrieval       │    │
+│  │ (REST API)    │ │ (LangGraph)   │ │ (Hybrid)       │    │
+│  └──────┬────────┘ └──────┬────────┘ └────────┬────────┘    │
+│         ▼                 ▼                  ▼              │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │              Knowledge Fusion Engine                 │    │
+│  │  - EntityDisambiguator  - RelationAligner          │    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+          ▼                ▼
+┌─────────────────┐  ┌─────────────────┐
+│    Neo4j        │  │  Vector DB      │
+│ (知识图谱存储)   │  │  (向量检索)     │
+└─────────────────┘  └─────────────────┘
 ```
 
-### 前端设置
+## 技术栈
+
+| 层级 | 技术 | 用途 |
+|------|------|------|
+| 前端 | React 19 + TypeScript | UI框架 |
+| 前端 | Tailwind CSS 4 | 样式框架 |
+| 前端 | Vis Network | 图谱可视化 |
+| 后端 | FastAPI | API框架 |
+| 后端 | Neo4j | 图数据库 |
+| 后端 | LangChain / LangGraph | LLM集成与工作流 |
+| 模型 | DashScope Qwen系列 | 大语言模型 |
+| 实体识别 | BioBERT / Medical-NER | 医疗实体抽取 |
+
+## 安装说明
+
+### 环境要求
+
+- Python >= 3.10
+- Node.js >= 18
+- Neo4j >= 5.0
+- DashScope API Key
+
+### 后端安装
 
 ```bash
-# 进入前端目录
-cd front
+cd backend
+pip install -r requirements.txt
+cp .env.example .env
+# 编辑 .env 文件，配置 Neo4j 和 DashScope
+```
 
-# 安装依赖
+### 前端安装
+
+```bash
+cd frontend
 npm install
-
-# 运行开发服务器
-npm run dev
-
-# 构建生产版本
-npm run build
+cp .env.example .env
+# 编辑 .env 文件，配置 API 地址
 ```
 
-## 项目结构
-
-```
-graphrag/
-├── src/
-│   ├── api/           # FastAPI 路由和 Pydantic 模式
-│   ├── core/          # 配置、Neo4j 客户端、缓存
-│   ├── ingestion/     # 文档加载、分块、知识图谱构建、嵌入
-│   ├── retrieval/     # 向量、图谱和混合检索
-│   ├── chains/        # Cypher 生成、QA 链
-│   ├── workflow/      # LangGraph 工作流、路由、状态
-│   └── utils/         # 工具（日志记录器）
-├── tests/             # 测试文件
-├── config/            # YAML 配置文件
-└── data/              # 数据目录
-
-front/
-├── src/
-│   ├── components/    # React 组件
-│   ├── pages/         # 页面
-│   ├── hooks/         # 自定义钩子
-│   └── services/      # API 服务
-└── public/            # 静态资产
-```
-
-## 核心功能
-
-- **文档摄取**：支持加载和处理多种格式的文档
-- **知识图谱构建**：从文档中提取实体和关系，构建知识图谱
-- **混合检索**：结合向量检索和图谱检索，提供更准确的结果
-- **智能问答**：基于检索到的信息生成准确的回答
-- **可视化界面**：提供直观的用户界面，方便用户交互
-
-## 配置
-
-### 后端配置
-
-- **环境变量**：`.env` 文件
-- **配置文件**：`config/settings.yaml`
-- **LLM 模型**：`OPENAI_MODEL` 用于一般任务，`EXTRACTION_MODEL` 用于实体提取
-
-### 前端配置
-
-- **环境变量**：`.env` 文件，使用 `VITE_` 前缀
-
-## 测试
+### 启动服务
 
 ```bash
-# 运行所有测试
-pytest
+# 启动后端 (端口 8000)
+cd backend
+python -m uvicorn src.main:app --reload
 
-# 运行单个测试文件
-pytest tests/test_ingestion.py
-
-# 运行单个测试
-pytest tests/test_ingestion.py -k test_load_text_file
-
-# 运行测试并显示详细输出
-pytest -v
+# 启动前端 (端口 3000)
+cd frontend
+npm run dev
 ```
 
-## 代码风格
+## 使用指南
 
-### Python
+### 文档入库
 
-- **格式化工具**：Ruff，`line-length = 100`，目标 `py311`
-- **导入顺序**：标准库 → 第三方库 → 本地导入（在 `src/` 内使用相对导入）
-- **命名约定**：
-  - 类：`PascalCase`
-  - 函数/方法：`snake_case`
-  - 私有方法：前导下划线
-  - 常量：`UPPER_SNAKE_CASE`
-- **类型提示**：使用 `typing` 模块，Pydantic `BaseModel` 用于 API 模式
-- **错误处理**：使用 `loguru` 进行日志记录，在 API 路由中使用 `HTTPException`
+1. 登录系统后进入"知识入库"页面
+2. 上传医疗文档（支持 PDF, DOCX, TXT, CSV）
+3. 选择是否提取实体和创建向量嵌入
+4. 点击"开始入库"完成文档处理
 
-## 常见问题
+### 图谱可视化
 
-### Neo4j 连接
-- 确保 Neo4j 正在运行：`bolt://localhost:7687`
-- 检查 `.env` 文件中的凭据
-- 验证 `NEO4J_PASSWORD` 是否正确
+1. 进入"图谱可视化"页面
+2. 使用搜索框查找特定节点
+3. 右键节点选择"展示相关联系"查看关联关系
+4. 鼠标悬停节点查看详情并高亮关联节点
 
-### LLM API
-- 验证 `.env` 中是否设置了 `OPENAI_API_KEY`
-- 对于 DashScope：确保 `OPENAI_BASE_URL` 指向兼容的端点
-- 模型名称：`qwen-plus`、`qwen-flash`、`gpt-4o-mini`
+### 智能问答
 
-### 导入错误
-- 在 `src/` 内始终使用相对导入（例如：`from ..core.config import ...`）
-- 不要使用绝对导入，如 `from src.core.config import ...`
+1. 进入"医疗问答"页面
+2. 输入医疗相关问题，如：
+   - "糖尿病如何治疗？"
+   - "感冒发烧怎么办？"
+   - "高血压有哪些症状？"
+3. 系统支持混合搜索和纯图谱搜索两种模式
 
-## 开发工作流程
+## 开发环境
 
-1. **创建分支**用于新功能
-2. **编写测试**然后实现（推荐 TDD）
-3. **频繁运行测试**：`pytest -v`
-4. **提交前格式化代码**：`ruff format .`
-5. **提交前检查代码**：`ruff check .`
-6. **如果项目结构更改**，更新文档
+### 代码结构
 
-## 贡献
+```
+GRAPHRAG/
+├── backend/                    # 后端服务
+│   ├── src/
+│   │   ├── api/               # REST API 路由
+│   │   ├── chains/            # LLM 链
+│   │   ├── core/              # 核心组件
+│   │   ├── ingestion/         # 数据入库
+│   │   ├── retrieval/         # 检索模块
+│   │   └── workflow/          # 工作流
+│   ├── tests/                 # 测试用例
+│   └── config/                # 配置文件
+├── frontend/                  # 前端应用
+│   ├── src/
+│   │   ├── components/        # React 组件
+│   │   ├── lib/               # 工具函数
+│   │   └── types/             # 类型定义
+│   └── tests/                 # 前端测试
+└── docs/                      # 文档
+```
 
-欢迎贡献！请遵循上述开发工作流程，并确保您的代码符合项目的代码风格指南。
+### API 端点
+
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/api/v1/health` | GET | 健康检查 |
+| `/api/v1/query` | POST | 问答接口 |
+| `/api/v1/ingest/upload` | POST | 文档上传 |
+| `/api/v1/graph/data` | GET | 获取图谱数据 |
+| `/api/v1/graph/search` | GET | 节点搜索 |
+
+## 贡献指南
+
+欢迎贡献代码！请遵循以下步骤：
+
+1. Fork 项目
+2. 创建功能分支 (`git checkout -b feature/your-feature`)
+3. 提交更改 (`git commit -m 'Add some feature'`)
+4. 推送到分支 (`git push origin feature/your-feature`)
+5. 创建 Pull Request
+
+### 代码规范
+
+- Python: 遵循 PEP 8 规范
+- TypeScript: 使用 ESLint 检查
+- 提交信息使用约定式提交格式
 
 ## 许可证
 
-[MIT License](LICENSE)
+本项目采用 MIT 许可证，详见 [LICENSE](LICENSE) 文件。
+
+## 联系方式
+
+- 项目维护者: MedicalGraph Team
+- 邮箱: contact@medicalgraph.dev
+- GitHub: [https://github.com/medicalgraph/GRAPHRAG](https://github.com/medicalgraph/GRAPHRAG)
+
+---
+
+**注意**: 本系统仅供参考和研究目的，不构成医疗建议。医疗决策请咨询专业医生。

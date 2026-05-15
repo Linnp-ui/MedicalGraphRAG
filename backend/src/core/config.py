@@ -10,7 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    neo4j_uri: str = Field(default="bolt://localhost:7687", alias="NEO4J_URI")
+    neo4j_uri: str = Field(default="bolt://localhost:17687", alias="NEO4J_URI")
     neo4j_username: str = Field(default="neo4j", alias="NEO4J_USERNAME")
     neo4j_password: str = Field(default="password", alias="NEO4J_PASSWORD")
 

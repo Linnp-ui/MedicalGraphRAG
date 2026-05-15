@@ -1,17 +1,35 @@
 export const nodeColors: Record<string, string> = {
+  Disease: '#EF4444',
+  Symptom: '#F97316',
+  Drug: '#22C55E',
+  Examination: '#3B82F6',
+  Treatment: '#8B5CF6',
+  Anatomy: '#06B6D4',
+  Department: '#EC4899',
   Person: '#3B82F6',
   Organization: '#10B981',
   Location: '#F59E0B',
   Event: '#8B5CF6',
   Concept: '#EC4899',
+  Document: '#14B8A6',
+  Chunk: '#6366F1',
+  Entity: '#F59E0B',
+  Movie: '#EC4899',
   default: '#6B7280'
 };
 
 export const edgeColors: Record<string, string> = {
+  HAS_SYMPTOM: '#F97316',
+  CAUSED_BY: '#EF4444',
+  TREATED_BY: '#22C55E',
+  DRUG_FOR: '#22C55E',
+  SIDE_EFFECT: '#F59E0B',
+  INDICATES: '#F97316',
+  PART_OF: '#06B6D4',
+  BELONGS_TO: '#EC4899',
   KNOWS: '#3B82F6',
   WORKS_FOR: '#10B981',
   LOCATED_IN: '#F59E0B',
-  PART_OF: '#8B5CF6',
   RELATED_TO: '#EC4899',
   default: '#9CA3AF'
 };

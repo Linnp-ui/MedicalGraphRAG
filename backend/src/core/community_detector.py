@@ -1,16 +1,25 @@
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 import networkx as nx
 from community import community_louvain
 from loguru import logger
 
 from ..core.neo4j_client import Neo4jClient
+from .leiden_detector import LeidenCommunityDetector
 
 
 class CommunityDetector:
     """社区检测模块 - 使用Leiden/Louvain算法对知识图谱进行社区聚类"""
 
-    def __init__(self, neo4j_client: Optional[Neo4jClient] = None):
+    def __init__(
+        self,
+        neo4j_client: Optional[Neo4jClient] = None,
+        algorithm: Literal["leiden", "louvain"] = "louvain",
+        resolution: float = 1.0
+    ):
         self._neo4j_client = neo4j_client
+        self._algorithm = algorithm
+        self._resolution = resolution
+        self._leiden_detector = LeidenCommunityDetector(resolution=resolution) if algorithm == "leiden" else None
         self._communities = {}
         self._community_summaries = {}
 
@@ -41,7 +50,7 @@ class CommunityDetector:
         return G
 
     def detect_communities(self, graph: Optional[nx.Graph] = None) -> Dict[str, int]:
-        """使用Louvain算法检测社区"""
+        """使用Leiden或Louvain算法检测社区"""
         if graph is None:
             graph = self.build_graph_from_neo4j()
 
@@ -50,14 +59,17 @@ class CommunityDetector:
             return {}
 
         try:
-            partition = community_louvain.best_partition(graph)
+            if self._algorithm == "leiden" and self._leiden_detector is not None:
+                partition = self._leiden_detector.detect_communities(graph)
+            else:
+                partition = community_louvain.best_partition(graph, resolution=self._resolution)
             self._communities = partition
 
             community_counts = {}
             for node, community_id in partition.items():
                 community_counts[community_id] = community_counts.get(community_id, 0) + 1
 
-            logger.info(f"Detected {len(community_counts)} communities")
+            logger.info(f"Detected {len(community_counts)} communities using {self._algorithm}")
             for comm_id, count in community_counts.items():
                 logger.debug(f"Community {comm_id}: {count} nodes")
 
@@ -165,11 +177,14 @@ class CommunityDetector:
         return communities
 
 
-def get_community_detector() -> CommunityDetector:
+def get_community_detector(
+    algorithm: str = "louvain",
+    resolution: float = 1.0
+) -> CommunityDetector:
     """获取社区检测单例"""
     global _community_detector
     if _community_detector is None:
-        _community_detector = CommunityDetector()
+        _community_detector = CommunityDetector(algorithm=algorithm, resolution=resolution)
     return _community_detector
 
 

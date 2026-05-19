@@ -3,6 +3,7 @@ from loguru import logger
 
 from .community_detector import CommunityDetector, get_community_detector
 from .neo4j_client import Neo4jClient
+from .llm_cache import get_llm_cache, llm_cached, LLMCache
 
 
 class SummaryGenerator:
@@ -11,10 +12,12 @@ class SummaryGenerator:
     def __init__(
         self,
         community_detector: Optional[CommunityDetector] = None,
-        neo4j_client: Optional[Neo4jClient] = None
+        neo4j_client: Optional[Neo4jClient] = None,
+        llm_cache: Optional[LLMCache] = None
     ):
         self._community_detector = community_detector or get_community_detector()
         self._neo4j_client = neo4j_client
+        self._llm_cache = llm_cache or get_llm_cache()
         self._summaries = {}
 
     def _get_neo4j_client(self) -> Neo4jClient:
@@ -82,6 +85,20 @@ class SummaryGenerator:
 实体详情:
 {chr(10).join(entity_summaries)}"""
 
+        return summary
+
+    def generate_community_summary_with_cache(self, community_id: int, level: int = 0) -> str:
+        """为社区生成摘要（带缓存）"""
+        cache_key = f"community_summary:{community_id}:{level}"
+        
+        cached = self._llm_cache.cache.get(cache_key)
+        if cached is not None:
+            logger.debug(f"Cache hit for community {community_id} summary")
+            return cached
+        
+        summary = self.generate_community_summary(community_id, level)
+        self._llm_cache.cache.set(cache_key, summary)
+        
         return summary
 
     def generate_hierarchical_summaries(self, levels: int = 3) -> Dict[int, str]:

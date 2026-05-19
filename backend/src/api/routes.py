@@ -33,6 +33,8 @@ from .schemas import (
 from ..core.neo4j_client import get_neo4j_client
 from ..core.config import get_settings
 from ..core.cache import get_graph_data_cache, get_search_cache
+from ..core.hierarchical_communities import get_hierarchical_manager
+from ..core.llm_cache import get_llm_cache
 from ..retrieval.vector_retriever import VectorRetriever
 from ..retrieval.graph_retriever import GraphRetriever
 from ..retrieval.drift_search import DRIFTSearch, drift_search, explain_drift_strategy
@@ -1036,3 +1038,69 @@ async def get_document_version(document_id: str):
     except Exception as e:
         logger.error(f"获取版本信息失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── 分层社区管理 API ────────────────────────────────────────────────────────────
+
+
+@router.get("/community/stats")
+async def get_community_stats():
+    """获取分层社区统计信息"""
+    manager = get_hierarchical_manager()
+    return manager.get_stats()
+
+
+@router.get("/community/level/{level}")
+async def get_communities_at_level(level: int):
+    """获取指定层级的所有社区"""
+    manager = get_hierarchical_manager()
+    try:
+        communities = manager.get_communities_by_level(level)
+        return {
+            "level": level,
+            "communities": {
+                k: {"member_count": len(v), "members": v[:10]}
+                for k, v in communities.items()
+            }
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/community/{level}/{community_id}")
+async def get_community_detail(level: int, community_id: int):
+    """获取社区详情"""
+    manager = get_hierarchical_manager()
+    try:
+        members = manager.get_community_members(level, community_id)
+        summary = manager.get_community_summary(level, community_id)
+        
+        return {
+            "level": level,
+            "community_id": community_id,
+            "member_count": len(members),
+            "members": members,
+            "summary": summary
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ─── LLM 缓存管理 API ──────────────────────────────────────────────────────────────
+
+
+@router.get("/cache/stats")
+async def get_cache_stats():
+    """获取 LLM 缓存统计"""
+    cache = get_llm_cache()
+    stats = cache.get_stats()
+    stats["hit_rate"] = cache.get_hit_rate()
+    return stats
+
+
+@router.post("/cache/clear")
+async def clear_cache():
+    """清空 LLM 缓存"""
+    cache = get_llm_cache()
+    cache.clear()
+    return {"status": "cleared"}

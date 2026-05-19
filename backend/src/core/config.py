@@ -44,6 +44,15 @@ class Settings(BaseSettings):
 
     domain: Literal["general", "medical"] = Field(default="general", alias="DOMAIN")
 
+    community_algorithm: str = "leiden"
+    community_levels: int = 3
+    community_resolution: float = 1.0
+    community_min_size: int = 5
+
+    llm_cache_enabled: bool = True
+    llm_cache_ttl: int = 604800
+    llm_cache_max_size: int = 1000
+
     chunk_size: int = Field(default=512)
     chunk_overlap: int = Field(default=75)
     split_strategy: str = Field(default="auto")

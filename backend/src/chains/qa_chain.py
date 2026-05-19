@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional
+import asyncio
 import hashlib
 from functools import lru_cache
 
@@ -10,6 +11,7 @@ from loguru import logger
 from ..core.config import get_settings, load_prompts
 from ..core.circuit_breaker import get_circuit_breaker, CircuitOpenError
 from ..core.cache import cached, get_query_cache
+from ..core.metrics import get_metrics
 
 LLM_TIMEOUT_SECONDS = 30
 LLM_MAX_RETRIES = 2
@@ -19,24 +21,12 @@ QA_CACHE_SIZE = 1000
 def _compress_history(
     history: List[Dict[str, str]], max_recent: int = 4, max_summary_len: int = 50
 ) -> List[Dict[str, str]]:
-    """Compress conversation history: summarize old messages, keep recent ones intact.
-
-    Args:
-        history: Full message list [{'role': 'user'|'bot', 'content': '...'}]
-        max_recent: Number of recent messages to keep intact (default 4 = 2 turns)
-        max_summary_len: Max chars per message in summary
-
-    Returns:
-        Compressed history list with summary + recent messages
-    """
     if len(history) <= max_recent:
         return history
 
-    # Split into old (to summarize) and recent (keep intact)
     old_messages = history[:-max_recent]
     recent_messages = history[-max_recent:]
 
-    # Build summary from old messages (pair user questions with bot answers)
     summary_parts = []
     i = 0
     while i < len(old_messages):
@@ -44,7 +34,6 @@ def _compress_history(
         if msg.get("role") == "user":
             question = msg.get("content", "")[:max_summary_len]
             answer = ""
-            # Look for the next bot message
             if i + 1 < len(old_messages) and old_messages[i + 1].get("role") == "bot":
                 answer = old_messages[i + 1].get("content", "")[:max_summary_len]
                 i += 2
@@ -66,16 +55,14 @@ def _compress_history(
     return [summary_msg] + recent_messages
 
 
-class QAChain:
-    """Question answering chain using LLM"""
+class AsyncQAChain:
+    """Async question answering chain using LLM with non-blocking calls"""
 
-    def __init__(
-        self,
-        llm: Optional[ChatOpenAI] = None,
-    ):
+    def __init__(self, llm: Optional[ChatOpenAI] = None):
         self.settings = get_settings()
         self.llm = llm
         self._prompts = None
+        self._async_llm = None
 
     def _get_llm(self) -> ChatOpenAI:
         if self.llm is None:
@@ -89,19 +76,30 @@ class QAChain:
             )
         return self.llm
 
+    def _get_async_llm(self) -> ChatOpenAI:
+        if self._async_llm is None:
+            self._async_llm = ChatOpenAI(
+                model=self.settings.dashscope_model,
+                temperature=0,
+                api_key=self.settings.dashscope_api_key,
+                base_url=self.settings.dashscope_base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                request_timeout=LLM_TIMEOUT_SECONDS,
+                max_retries=LLM_MAX_RETRIES,
+            )
+        return self._async_llm
+
     def _get_prompts(self) -> Dict[str, Any]:
         if self._prompts is None:
             self._prompts = load_prompts()
         return self._prompts
 
-    @cached(get_query_cache)
-    def answer(
+    async def aanswer(
         self,
         question: str,
         context: str,
         history: Optional[List[Dict[str, str]]] = None,
     ) -> str:
-        """Answer question with context and optional conversation history"""
+        """Async answer question with context and optional conversation history"""
         prompts = self._get_prompts()
         qa_prompt = prompts.get("prompts", {}).get("qa", {})
 
@@ -119,16 +117,103 @@ class QAChain:
         messages.append(("human", human_template))
 
         prompt = ChatPromptTemplate.from_messages(messages)
-
-        chain = prompt | self._get_llm() | StrOutputParser()
+        chain = prompt | self._get_async_llm() | StrOutputParser()
 
         circuit_breaker = get_circuit_breaker("llm_qa")
-        
+        metrics = get_metrics()
+
         try:
             if circuit_breaker.state.name == "OPEN":
                 logger.warning("Circuit breaker OPEN, returning fallback response")
+                metrics.increment("llm_fallback_total", {"reason": "circuit_open"})
                 return self._get_fallback_response(question, context)
-            
+
+            start_time = __import__("time").perf_counter()
+            answer = await chain.ainvoke(
+                {
+                    "question": question,
+                    "context": context,
+                }
+            )
+            duration_ms = (__import__("time").perf_counter() - start_time) * 1000
+            metrics.observe("llm_call_duration_ms", duration_ms)
+            metrics.increment("llm_calls_total", {"status": "success"})
+
+            circuit_breaker.record_success()
+            logger.info(f"Generated answer: {answer[:100]}...")
+            return answer
+        except Exception as e:
+            circuit_breaker.record_failure()
+            metrics.increment("llm_calls_total", {"status": "error"})
+            logger.error(f"Async QA chain failed: {e}")
+            return self._get_fallback_response(question, context)
+
+    def _get_fallback_response(self, question: str, context: str) -> str:
+        if context and len(context) > 100:
+            return f"基于检索到的信息，我找到了相关内容，但当前无法生成完整回答。请参考以下信息：\n\n{context[:500]}..."
+        return "抱歉，当前服务繁忙，请稍后重试。"
+
+
+class QAChain:
+    """Question answering chain using LLM (sync wrapper for backward compatibility)"""
+
+    def __init__(self, llm: Optional[ChatOpenAI] = None):
+        self.async_chain = AsyncQAChain(llm=llm)
+
+    def _get_prompts(self) -> Dict[str, Any]:
+        return self.async_chain._get_prompts()
+
+    @cached(get_query_cache)
+    def answer(
+        self,
+        question: str,
+        context: str,
+        history: Optional[List[Dict[str, str]]] = None,
+    ) -> str:
+        """Answer question with context and optional conversation history"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                return self._run_sync(question, context, history)
+            else:
+                return loop.run_until_complete(
+                    self.async_chain.aanswer(question, context, history)
+                )
+        except RuntimeError:
+            return self._run_sync(question, context, history)
+
+    def _run_sync(
+        self,
+        question: str,
+        context: str,
+        history: Optional[List[Dict[str, str]]] = None,
+    ) -> str:
+        prompts = self._get_prompts()
+        qa_prompt = prompts.get("prompts", {}).get("qa", {})
+
+        system_template = qa_prompt.get("system", "")
+        human_template = qa_prompt.get("human", "")
+
+        messages = [("system", system_template)]
+
+        if history:
+            compressed = _compress_history(history, max_recent=4, max_summary_len=50)
+            for msg in compressed:
+                role = "human" if msg.get("role") == "user" else "ai"
+                messages.append((role, msg.get("content", "")))
+
+        messages.append(("human", human_template))
+
+        prompt = ChatPromptTemplate.from_messages(messages)
+        chain = prompt | self.async_chain._get_llm() | StrOutputParser()
+
+        circuit_breaker = get_circuit_breaker("llm_qa")
+
+        try:
+            if circuit_breaker.state.name == "OPEN":
+                logger.warning("Circuit breaker OPEN, returning fallback response")
+                return self.async_chain._get_fallback_response(question, context)
+
             answer = chain.invoke(
                 {
                     "question": question,
@@ -141,13 +226,7 @@ class QAChain:
         except Exception as e:
             circuit_breaker.record_failure()
             logger.error(f"QA chain failed: {e}")
-            return self._get_fallback_response(question, context)
-
-    def _get_fallback_response(self, question: str, context: str) -> str:
-        """Generate a fallback response when LLM is unavailable"""
-        if context and len(context) > 100:
-            return f"基于检索到的信息，我找到了相关内容，但当前无法生成完整回答。请参考以下信息：\n\n{context[:500]}..."
-        return "抱歉，当前服务繁忙，请稍后重试。"
+            return self.async_chain._get_fallback_response(question, context)
 
     def answer_with_sources(
         self,
@@ -155,9 +234,7 @@ class QAChain:
         context: str,
         sources: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, str]:
-        """Answer question with sources"""
         answer = self.answer(question, context)
-
         return {
             "question": question,
             "answer": answer,
@@ -169,6 +246,5 @@ def answer_question(
     question: str,
     context: str,
 ) -> str:
-    """Convenience function to answer a question"""
     chain = QAChain()
     return chain.answer(question, context)

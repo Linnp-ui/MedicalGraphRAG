@@ -38,29 +38,47 @@ class HybridRetriever:
         self.vector_retriever = VectorRetriever()
         self.graph_retriever = GraphRetriever()
         self._executor = ThreadPoolExecutor(max_workers=2)
+        self._closed = False
+
+    def close(self, wait: bool = True):
+        """关闭线程池执行器，释放资源
+
+        Args:
+            wait: 是否等待所有任务完成
+        """
+        if not self._closed:
+            self._executor.shutdown(wait=wait)
+            self._closed = True
+            logger.info("HybridRetriever executor closed")
+
+    def __del__(self):
+        """对象销毁时自动关闭执行器"""
+        self.close(wait=False)
+
+    def __enter__(self):
+        """支持上下文管理器"""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """上下文退出时关闭执行器"""
+        self.close()
+        return False
 
     @cached(get_query_cache)
     def search(
         self,
         query: str,
         filters: Optional[Dict[str, Any]] = None,
-        alpha: Optional[float] = None,
     ) -> Dict[str, Any]:
         """执行混合搜索，结合向量搜索和图谱搜索结果
 
         Args:
             query: 搜索查询
             filters: 可选的过滤条件
-            alpha: 可选的 alpha 权重覆盖（未提供时自动计算）
 
         Returns:
             包含向量搜索结果、图谱搜索结果和组合结果的字典
         """
-        if alpha is not None:
-            self.alpha = alpha
-        else:
-            self.alpha = self._compute_dynamic_alpha(query)
-
         vector_results = []
         graph_results = []
 
@@ -79,27 +97,6 @@ class HybridRetriever:
             "query": query,
             "alpha_used": self.alpha,
         }
-
-    def _compute_dynamic_alpha(self, query: str) -> float:
-        """根据查询特征动态计算 alpha 权重
-
-        Args:
-            query: 搜索查询
-
-        Returns:
-            计算得到的 alpha 权重值
-        """
-        entity_indicators = ["谁", "什么实体", "关系", "连接", "包含", "节点", "实体"]
-        numeric_indicators = ["多少", "数量", "统计", "排名", "前", "最高", "最低"]
-
-        query_lower = query.lower()
-
-        if any(ind in query_lower for ind in entity_indicators):
-            return 0.3  # 实体相关查询，增加图谱搜索权重
-        elif any(ind in query_lower for ind in numeric_indicators):
-            return 0.7  # 数值相关查询，增加向量搜索权重
-
-        return 0.5  # 默认平衡权重
 
     def _parallel_search(
         self,

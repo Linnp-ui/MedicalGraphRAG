@@ -31,5 +31,24 @@ MEDICAL_SCHEMA = {
         MedicalEntityType.TREATMENT: "非药物类的治疗方法，如：手术、放疗、理疗等",
         MedicalEntityType.ANATOMY: "人体部位或器官，如：肺部、肝脏、神经系统等",
         MedicalEntityType.DEPARTMENT: "医院的科室，如：内科、外科、眼科等"
+    },
+    "allowed_relations": {
+        "Disease": {
+            "Symptom": ["HAS_SYMPTOM"],
+            "Treatment": ["TREATED_BY"],
+            "Drug": ["TREATED_BY"],
+            "Department": ["BELONGS_TO"],
+            "Anatomy": ["PART_OF"],
+        },
+        "Drug": {
+            "Disease": ["DRUG_FOR"],
+            "Symptom": ["SIDE_EFFECT"],
+        },
+        "Symptom": {
+            "Disease": ["INDICATES"],
+        },
+        "Anatomy": {
+            "Disease": ["PART_OF"],
+        },
     }
 }

@@ -118,6 +118,216 @@ class QAEvaluator:
                 expected_answer_keywords=["感冒", "发烧", "治疗", "休息"],
                 context="感冒发烧应注意休息、多喝水，必要时使用退烧药如布洛芬。"
             ),
+            TestCase(
+                question="肺炎是什么原因引起的？",
+                expected_intent="disease_query",
+                expected_entities=["肺炎"],
+                expected_answer_keywords=["肺炎", "原因", "感染", "细菌", "病毒"],
+                context="肺炎通常由细菌或病毒感染引起，常见病原体包括肺炎链球菌、金黄色葡萄球菌等。"
+            ),
+            TestCase(
+                question="胰岛素的使用方法是什么？",
+                expected_intent="drug_query",
+                expected_entities=["胰岛素"],
+                expected_answer_keywords=["胰岛素", "用法", "注射", "糖尿病"],
+                context="胰岛素主要用于糖尿病治疗，需要皮下注射使用。"
+            ),
+            TestCase(
+                question="我咳嗽了半个月了，是怎么回事？",
+                expected_intent="diagnosis_assist",
+                expected_entities=["咳嗽"],
+                expected_answer_keywords=["咳嗽", "可能", "原因", "检查"],
+                context="长期咳嗽可能由多种原因引起，如支气管炎、肺炎、哮喘等。"
+            ),
+            TestCase(
+                question="肺癌的高危因素有哪些？",
+                expected_intent="disease_query",
+                expected_entities=["肺癌"],
+                expected_answer_keywords=["肺癌", "高危", "因素", "吸烟"],
+                context="肺癌的高危因素包括吸烟、空气污染、职业暴露、遗传因素等。"
+            ),
+            TestCase(
+                question="硝苯地平片的用法用量？",
+                expected_intent="drug_query",
+                expected_entities=["硝苯地平"],
+                expected_answer_keywords=["硝苯地平", "用法", "用量", "高血压"],
+                context="硝苯地平是钙通道阻滞剂，用于治疗高血压和心绞痛。"
+            ),
+            TestCase(
+                question="胃炎吃什么药效果好？",
+                expected_intent="drug_query",
+                expected_entities=["胃炎"],
+                expected_answer_keywords=["胃炎", "药物", "治疗", "胃酸"],
+                context="胃炎常用药物包括质子泵抑制剂、胃黏膜保护剂等。"
+            ),
+            TestCase(
+                question="如何预防心血管疾病？",
+                expected_intent="prevention_query",
+                expected_entities=["心血管疾病"],
+                expected_answer_keywords=["预防", "心血管", "健康", "生活方式"],
+                context="预防心血管疾病需要保持健康生活方式，包括合理饮食、适量运动、戒烟限酒等。"
+            ),
+            TestCase(
+                question="乙肝的传播途径有哪些？",
+                expected_intent="disease_query",
+                expected_entities=["乙肝"],
+                expected_answer_keywords=["乙肝", "传播", "途径", "病毒"],
+                context="乙肝主要通过血液、母婴和性接触传播。"
+            ),
+            TestCase(
+                question="我总是恶心想吐，是什么问题？",
+                expected_intent="diagnosis_assist",
+                expected_entities=["恶心", "呕吐"],
+                expected_answer_keywords=["恶心", "呕吐", "可能", "原因"],
+                context="恶心呕吐可能由消化系统疾病、神经系统疾病、药物反应等多种原因引起。"
+            ),
+            TestCase(
+                question="二甲双胍有哪些禁忌？",
+                expected_intent="drug_query",
+                expected_entities=["二甲双胍"],
+                expected_answer_keywords=["二甲双胍", "禁忌", "肾功能", "糖尿病"],
+                context="二甲双胍禁用于严重肾功能不全、肝功能衰竭、酗酒等患者。"
+            ),
+            TestCase(
+                question="骨折后如何进行康复锻炼？",
+                expected_intent="treatment_query",
+                expected_entities=["骨折"],
+                expected_answer_keywords=["骨折", "康复", "锻炼", "恢复"],
+                context="骨折康复需要在医生指导下进行，包括早期活动、功能锻炼等。"
+            ),
+            TestCase(
+                question="脑梗死的后遗症有哪些？",
+                expected_intent="disease_query",
+                expected_entities=["脑梗死"],
+                expected_answer_keywords=["脑梗死", "后遗症", "偏瘫", "语言"],
+                context="脑梗死常见后遗症包括偏瘫、语言障碍、认知功能下降等。"
+            ),
+            TestCase(
+                question="甲状腺功能检查需要空腹吗？",
+                expected_intent="examination_query",
+                expected_entities=["甲状腺"],
+                expected_answer_keywords=["甲状腺", "检查", "空腹", "验血"],
+                context="甲状腺功能检查通常需要空腹采血，以获得更准确的结果。"
+            ),
+            TestCase(
+                question="我腹泻了三天，应该注意什么？",
+                expected_intent="health_advice",
+                expected_entities=["腹泻"],
+                expected_answer_keywords=["腹泻", "注意", "饮食", "补水"],
+                context="腹泻时应注意补充水分和电解质，清淡饮食，必要时就医。"
+            ),
+            TestCase(
+                question="抑郁症的早期症状是什么？",
+                expected_intent="disease_query",
+                expected_entities=["抑郁症"],
+                expected_answer_keywords=["抑郁症", "症状", "情绪", "兴趣"],
+                context="抑郁症早期症状包括情绪低落、兴趣减退、睡眠障碍、食欲改变等。"
+            ),
+            TestCase(
+                question="贫血吃什么补血最快？",
+                expected_intent="health_advice",
+                expected_entities=["贫血"],
+                expected_answer_keywords=["贫血", "补血", "食物", "铁"],
+                context="贫血患者应多食用富含铁的食物，如红肉、动物肝脏、菠菜等。"
+            ),
+            TestCase(
+                question="痛风发作时怎么处理？",
+                expected_intent="symptom_query",
+                expected_entities=["痛风"],
+                expected_answer_keywords=["痛风", "发作", "处理", "疼痛"],
+                context="痛风急性发作时应卧床休息、抬高患肢、可使用秋水仙碱或非甾体抗炎药。"
+            ),
+            TestCase(
+                question="肾结石多大需要手术治疗？",
+                expected_intent="disease_query",
+                expected_entities=["肾结石"],
+                expected_answer_keywords=["肾结石", "手术", "治疗", "大小"],
+                context="肾结石的治疗方式取决于结石大小、位置及患者情况，一般大于1cm可能需要手术。"
+            ),
+            TestCase(
+                question="帕金森病有什么症状？",
+                expected_intent="disease_query",
+                expected_entities=["帕金森"],
+                expected_answer_keywords=["帕金森", "症状", "震颤", "运动"],
+                context="帕金森病主要症状包括静止性震颤、肌强直、运动迟缓、姿势步态异常等。"
+            ),
+            TestCase(
+                question="阿尔茨海默症如何延缓病情发展？",
+                expected_intent="disease_query",
+                expected_entities=["阿尔茨海默症"],
+                expected_answer_keywords=["阿尔茨海默症", "延缓", "治疗", "认知"],
+                context="阿尔茨海默症可通过药物治疗、认知训练、健康生活方式延缓病情进展。"
+            ),
+            TestCase(
+                question="骨质疏松怎么补钙最有效？",
+                expected_intent="health_advice",
+                expected_entities=["骨质疏松"],
+                expected_answer_keywords=["骨质疏松", "补钙", "维生素D", "运动"],
+                context="骨质疏松患者应补充钙剂和维生素D，适度负重运动，多晒太阳。"
+            ),
+            TestCase(
+                question="我有慢性咽炎，吃什么药好？",
+                expected_intent="drug_query",
+                expected_entities=["咽炎"],
+                expected_answer_keywords=["咽炎", "药物", "治疗", "慢性"],
+                context="慢性咽炎可用含片、中成药治疗，关键在于去除病因和日常护理。"
+            ),
+            TestCase(
+                question="脑出血后遗症康复需要注意什么？",
+                expected_intent="treatment_query",
+                expected_entities=["脑出血"],
+                expected_answer_keywords=["脑出血", "康复", "注意", "功能"],
+                context="脑出血康复需要在专业指导下进行，包括肢体功能训练、语言训练等。"
+            ),
+            TestCase(
+                question="我最近总是失眠，是什么原因？",
+                expected_intent="diagnosis_assist",
+                expected_entities=["失眠"],
+                expected_answer_keywords=["失眠", "原因", "睡眠", "压力"],
+                context="失眠原因包括精神压力、不良睡眠习惯、疾病因素、药物影响等。"
+            ),
+            TestCase(
+                question="荨麻疹传染吗？",
+                expected_intent="disease_query",
+                expected_entities=["荨麻疹"],
+                expected_answer_keywords=["荨麻疹", "传染", "过敏", "皮肤"],
+                context="荨麻疹是一种过敏性疾病，不具有传染性。"
+            ),
+            TestCase(
+                question="我反复口腔溃疡是什么原因？",
+                expected_intent="diagnosis_assist",
+                expected_entities=["口腔溃疡"],
+                expected_answer_keywords=["口腔溃疡", "原因", "免疫", "维生素"],
+                context="反复口腔溃疡可能与免疫功能、营养缺乏、精神因素、局部刺激等有关。"
+            ),
+            TestCase(
+                question="如何区分普通感冒和流感？",
+                expected_intent="disease_query",
+                expected_entities=["感冒", "流感"],
+                expected_answer_keywords=["感冒", "流感", "区别", "症状"],
+                context="普通感冒和流感在症状严重程度、发热特点、全身症状等方面有区别。"
+            ),
+            TestCase(
+                question="类风湿性关节炎有哪些表现？",
+                expected_intent="disease_query",
+                expected_entities=["类风湿性关节炎"],
+                expected_answer_keywords=["类风湿", "关节炎", "症状", "关节"],
+                context="类风湿性关节炎主要表现为对称性关节肿痛、晨僵、功能障碍等。"
+            ),
+            TestCase(
+                question="支气管哮喘急性发作怎么处理？",
+                expected_intent="symptom_query",
+                expected_entities=["哮喘"],
+                expected_answer_keywords=["哮喘", "发作", "处理", "呼吸"],
+                context="哮喘急性发作时应使用速效支气管舒张剂，如沙丁胺醇吸入剂。"
+            ),
+            TestCase(
+                question="我有脂肪肝，饮食上要注意什么？",
+                expected_intent="health_advice",
+                expected_entities=["脂肪肝"],
+                expected_answer_keywords=["脂肪肝", "饮食", "注意", "控制"],
+                context="脂肪肝患者应控制饮食、减重、戒酒、适度运动。"
+            ),
         ]
 
     def evaluate_intent(self, question: str, expected_intent: str) -> bool:
@@ -185,7 +395,7 @@ class QAEvaluator:
         test_cases = self.load_test_cases()
         
         for tc in test_cases:
-            print(f"评估: {tc.question}")
+            print(f"评估 [{test_cases.index(tc)+1}/{len(test_cases)}]: {tc.question}")
             result = self.evaluate_single(tc)
             self.results.append(result)
             
@@ -201,7 +411,6 @@ class QAEvaluator:
                 PerformanceMetrics(avg_response_time=0, max_response_time=0, min_response_time=0, p95_response_time=0, throughput=0)
             )
 
-        # 质量指标
         intent_accuracy = sum(1 for r in results if r.intent_correct) / len(results)
         
         total_expected = sum(len(r.test_case.expected_entities) for r in results)
@@ -212,7 +421,6 @@ class QAEvaluator:
         
         overall_score = (intent_accuracy + entity_recall + answer_relevance) / 3
 
-        # 性能指标
         times = [r.response_time for r in results]
         avg_time = sum(times) / len(times)
         max_time = max(times)
@@ -275,6 +483,7 @@ class QAEvaluator:
         """保存评估报告"""
         report = {
             "timestamp": datetime.now().isoformat(),
+            "total_test_cases": len(self.results),
             "quality_metrics": {
                 "intent_accuracy": quality.intent_accuracy,
                 "entity_recall": quality.entity_recall,
@@ -291,6 +500,7 @@ class QAEvaluator:
             "detailed_results": [
                 {
                     "question": r.test_case.question,
+                    "expected_intent": r.test_case.expected_intent,
                     "intent_correct": r.intent_correct,
                     "entities_found": r.entities_found,
                     "expected_entities": len(r.test_case.expected_entities),
@@ -311,7 +521,7 @@ class QAEvaluator:
 
 def main():
     evaluator = QAEvaluator()
-    print("开始问答功能评估...")
+    print(f"开始问答功能评估... (共 {len(evaluator.load_test_cases())} 个测试用例)")
     
     quality, performance = evaluator.run_evaluation()
     evaluator.print_report(quality, performance)

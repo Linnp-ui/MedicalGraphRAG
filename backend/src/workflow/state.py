@@ -12,7 +12,7 @@ class GraphState(TypedDict):
         cypher_query: Generated Cypher query
         graph_result: Result from graph query
         answer: Final answer to the user
-        routing: Decision about which path to take (vector/graph/hybrid)
+        routing: Decision about which retrieval path was used (global/local/hybrid)
         subqueries: Decomposed sub-queries
         context: Additional context for query generation
         error: Error message if any

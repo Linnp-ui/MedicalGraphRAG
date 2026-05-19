@@ -11,6 +11,8 @@ class SplitStrategy(str, Enum):
     MARKDOWN = "markdown"
     HYBRID = "hybrid"
     MEDICAL = "medical"
+    SEMANTIC = "semantic"
+    HIERARCHICAL = "hierarchical"
 
 
 @dataclass
@@ -25,9 +27,9 @@ class TextChunk:
 class TextSplitter:
     def __init__(
         self,
-        chunk_size: int = 1000,
-        chunk_overlap: int = 200,
-        strategy: SplitStrategy = SplitStrategy.PARAGRAPH,
+        chunk_size: int = 512,
+        chunk_overlap: int = 75,
+        strategy: SplitStrategy = SplitStrategy.HYBRID,
         keep_code_blocks: bool = True,
         keep_headers: bool = True,
     ):
@@ -47,6 +49,10 @@ class TextSplitter:
             return self._split_hybrid(text, document_id)
         elif self.strategy == SplitStrategy.MEDICAL:
             return self._split_medical(text, document_id)
+        elif self.strategy == SplitStrategy.SEMANTIC:
+            return self._split_semantic(text, document_id)
+        elif self.strategy == SplitStrategy.HIERARCHICAL:
+            return self._split_hierarchical(text, document_id)
         else:
             return self._split_by_paragraph(text, document_id)
 
@@ -209,6 +215,154 @@ class TextSplitter:
 
         logger.debug(f"Medical split: {len(chunks)} chunks from {len(parts)} parts")
         return chunks
+
+    def _split_semantic(self, text: str, document_id: str) -> List[TextChunk]:
+        """语义分块：基于嵌入相似度检测主题边界
+
+        算法流程：
+        1. 按句子分割
+        2. 对每句生成嵌入（使用轻量级本地模型）
+        3. 计算相邻句子余弦相似度
+        4. 相似度低于阈值处创建新分块
+
+        Args:
+            text: 待分割文本
+            document_id: 文档ID
+
+        Returns:
+            分割后的文本块列表
+        """
+        try:
+            from sentence_transformers import SentenceTransformer
+            import numpy as np
+        except ImportError:
+            logger.warning("sentence-transformers not installed, falling back to paragraph split")
+            return self._split_by_paragraph(text, document_id)
+
+        sentence_pattern = re.compile(r"(?<=[。.!?！？])\s+|(?<=[。.!?！？])(?=[A-Z\u4e00-\u9fff])")
+        sentences = [s.strip() for s in sentence_pattern.split(text) if s.strip()]
+
+        if len(sentences) <= 3:
+            return [self._create_chunk(text, document_id, 0, "semantic")]
+
+        try:
+            model = SentenceTransformer("shibing624/text2vec-base-chinese")
+            embeddings = model.encode(sentences)
+
+            similarities = []
+            for i in range(len(sentences) - 1):
+                sim = np.dot(embeddings[i], embeddings[i + 1]) / (
+                    np.linalg.norm(embeddings[i]) * np.linalg.norm(embeddings[i + 1]) + 1e-8
+                )
+                similarities.append(sim)
+
+            if not similarities:
+                return [self._create_chunk(text, document_id, 0, "semantic")]
+
+            threshold = np.percentile(similarities, 25)
+
+            chunks = []
+            current_chunk_sentences = [sentences[0]]
+            current_size = len(sentences[0])
+            index = 0
+
+            for i, sim in enumerate(similarities):
+                next_sentence = sentences[i + 1]
+                next_size = len(next_sentence)
+
+                if sim < threshold or current_size + next_size > self.chunk_size:
+                    chunk_text = " ".join(current_chunk_sentences)
+                    chunks.append(self._create_chunk(chunk_text, document_id, index, "semantic"))
+                    index += 1
+
+                    if self.chunk_overlap > 0 and current_chunk_sentences:
+                        overlap_text = " ".join(current_chunk_sentences[-2:])
+                        current_chunk_sentences = [overlap_text, next_sentence]
+                        current_size = len(overlap_text) + next_size
+                    else:
+                        current_chunk_sentences = [next_sentence]
+                        current_size = next_size
+                else:
+                    current_chunk_sentences.append(next_sentence)
+                    current_size += next_size
+
+            if current_chunk_sentences:
+                chunk_text = " ".join(current_chunk_sentences)
+                chunks.append(self._create_chunk(chunk_text, document_id, index, "semantic"))
+
+            logger.debug(f"Semantic split: {len(chunks)} chunks, threshold={threshold:.3f}")
+            return chunks
+
+        except Exception as e:
+            logger.warning(f"Semantic split failed: {e}, falling back to paragraph split")
+            return self._split_by_paragraph(text, document_id)
+
+    def _split_hierarchical(self, text: str, document_id: str) -> List[TextChunk]:
+        """层级分块：创建父子层级关系
+
+        创建三层结构：
+        - Level 1 (Parent): 1024 tokens → 整个章节
+        - Level 2 (Child):  512 tokens  → 段落级
+        - Level 3 (Detail): 256 tokens  → 句子级
+
+        Args:
+            text: 待分割文本
+            document_id: 文档ID
+
+        Returns:
+            分割后的文本块列表（带层级元数据）
+        """
+        all_chunks = []
+
+        paragraphs = re.split(r"\n\s*\n", text)
+        paragraphs = [p.strip() for p in paragraphs if p.strip()]
+
+        parent_text = []
+        parent_index = 0
+
+        for para in paragraphs:
+            parent_text.append(para)
+            parent_combined = "\n\n".join(parent_text)
+
+            if len(parent_combined) >= 1024 or para == paragraphs[-1]:
+                if parent_text:
+                    all_chunks.append(
+                        self._create_chunk(
+                            parent_combined,
+                            document_id,
+                            parent_index,
+                            "hierarchical_parent",
+                        )
+                    )
+                    parent_index += 1
+
+                    sentences = re.split(r"(?<=[。.!?！？])\s+", parent_combined)
+                    sentences = [s.strip() for s in sentences if s.strip()]
+
+                    child_text = []
+                    child_index = parent_index
+
+                    for sentence in sentences:
+                        child_text.append(sentence)
+                        child_combined = " ".join(child_text)
+
+                        if len(child_combined) >= 512 or sentence == sentences[-1]:
+                            if child_text:
+                                all_chunks.append(
+                                    self._create_chunk(
+                                        child_combined,
+                                        document_id,
+                                        child_index,
+                                        "hierarchical_child",
+                                    )
+                                )
+                                child_index += 1
+                                child_text = []
+
+                    parent_text = []
+
+        logger.debug(f"Hierarchical split: {len(all_chunks)} chunks")
+        return all_chunks
 
     def _split_section(self, section_text: str, document_id: str, start_index: int) -> List[TextChunk]:
         """分割医疗章节，保持语义完整
@@ -400,12 +554,72 @@ class TextSplitter:
             index += 1
 
 
+def select_chunking_strategy(text: str, domain: str = "general") -> SplitStrategy:
+    """根据文档特征自动选择最优分块策略
+
+    Args:
+        text: 文档内容
+        domain: 领域类型 ("medical" 或 "general")
+
+    Returns:
+        推荐的 SplitStrategy
+    """
+    if domain == "medical" and _is_medical_report(text):
+        return SplitStrategy.MEDICAL
+
+    if _has_markdown_structure(text):
+        return SplitStrategy.MARKDOWN
+
+    if len(text) > 5000 and not _has_clear_structure(text):
+        return SplitStrategy.SEMANTIC
+
+    if _has_multi_level_structure(text):
+        return SplitStrategy.HIERARCHICAL
+
+    return SplitStrategy.HYBRID
+
+
+def _is_medical_report(text: str) -> bool:
+    """检测是否为医疗报告"""
+    medical_keywords = [
+        "病史摘要", "主诉", "体格检查", "辅助检查", "实验室检查",
+        "影像学检查", "诊断", "诊疗计划", "治疗方案", "处置",
+        "既往史", "过敏史", "个人史", "家族史", "婚育史",
+        "出院小结", "预后", "讨论"
+    ]
+    return any(kw in text for kw in medical_keywords)
+
+
+def _has_markdown_structure(text: str) -> bool:
+    """检测是否有 Markdown 结构"""
+    header_count = len(re.findall(r"^#{1,6}\s+.+$", text, re.MULTILINE))
+    return header_count >= 3
+
+
+def _has_clear_structure(text: str) -> bool:
+    """检测是否有清晰结构"""
+    indicators = [
+        r"第[一二三四五六七八九十\d]+[章节部分篇]",
+        r"【.+】",
+        r"\d+\.\s+[A-Z\u4e00-\u9fff]",
+    ]
+    return any(re.search(pattern, text) for pattern in indicators)
+
+
+def _has_multi_level_structure(text: str) -> bool:
+    """检测是否有多层结构"""
+    h1 = len(re.findall(r"^#\s+", text, re.MULTILINE))
+    h2 = len(re.findall(r"^##\s+", text, re.MULTILINE))
+    h3 = len(re.findall(r"^###\s+", text, re.MULTILINE))
+    return (h1 > 0 and h2 > 0) or (h2 > 0 and h3 > 0)
+
+
 def split_text(
     text: str,
     document_id: str = "",
-    chunk_size: int = 1000,
-    chunk_overlap: int = 200,
-    strategy: str = "paragraph",
+    chunk_size: int = 512,
+    chunk_overlap: int = 75,
+    strategy: str = "hybrid",
 ) -> List[TextChunk]:
     splitter = TextSplitter(
         chunk_size=chunk_size,

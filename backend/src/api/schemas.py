@@ -137,3 +137,94 @@ class QueryResultRequest(BaseModel):
         if any(not node_id.isdigit() for node_id in value):
             raise ValueError("node_ids must contain only numeric strings")
         return value
+
+
+class ChunkContextItem(BaseModel):
+    chunk_id: str
+    content: str
+    index: int
+    is_target: bool
+
+
+class ChunkContextResponse(BaseModel):
+    chunk_id: str
+    document_id: str
+    document_title: str
+    context: List[ChunkContextItem]
+
+
+class DocumentReconstructionResponse(BaseModel):
+    document_id: str
+    title: str
+    source: Optional[str] = None
+    properties: Optional[Dict[str, Any]] = None
+    full_content: str
+    chunk_count: int
+
+
+class ChunkParentResponse(BaseModel):
+    document_id: str
+    title: str
+    source: Optional[str] = None
+    properties: Optional[Dict[str, Any]] = None
+
+
+class EntityChunkItem(BaseModel):
+    chunk_id: str
+    content: str
+    index: int
+    document_id: str
+    document_title: str
+
+
+class EntityChunksResponse(BaseModel):
+    entity_name: str
+    chunks: List[EntityChunkItem]
+
+
+class HybridSearchRequest(BaseModel):
+    query: str = Field(..., description="Search query", min_length=1, max_length=2000)
+    alpha: float = Field(default=0.5, ge=0.0, le=1.0, description="Weight for vector search (0=graph only, 1=vector only)")
+
+
+class HybridSearchResponse(BaseModel):
+    query: str
+    alpha_used: float
+    vector_results: List[Dict[str, Any]]
+    graph_results: List[Dict[str, Any]]
+    combined_results: List[Dict[str, Any]]
+
+
+class IngestionStatsResponse(BaseModel):
+    documents_skipped: int = Field(description="Number of duplicate documents skipped")
+    chunks_skipped: int = Field(description="Number of chunks with cached embeddings skipped")
+    entities_skipped: int = Field(description="Number of entities with cached embeddings skipped")
+    embeddings_cached_hits: int = Field(description="Total number of embedding cache hits")
+
+
+class UpdateDocumentRequest(BaseModel):
+    document_id: str = Field(..., description="Document ID to update")
+    content: str = Field(..., description="New document content")
+    strategy: str = Field(default="incremental", description="Update strategy: incremental, full_rebuild, lazy_update")
+
+
+class BatchUpdateRequest(BaseModel):
+    documents: List[Dict[str, str]] = Field(..., description="List of documents to update")
+    strategy: str = Field(default="incremental", description="Update strategy")
+
+
+class UpdateResultResponse(BaseModel):
+    document_id: str
+    success: bool
+    message: str = ""
+    updated_entities: int = 0
+    updated_relations: int = 0
+    updated_vectors: int = 0
+
+
+class DocumentVersionResponse(BaseModel):
+    document_id: str
+    version: int = 0
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    status: Optional[str] = None

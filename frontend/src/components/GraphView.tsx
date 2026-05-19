@@ -128,10 +128,13 @@ export function GraphView() {
       setSelectedLabel(null);
       setCenterNodeId(result.id);
       
-      const relatedNodeIds = new Set<string>();
-      relatedNodeIds.add(result.id);
-      graphData.nodes.forEach((n: any) => relatedNodeIds.add(n.id));
-      setHighlightedNodes(relatedNodeIds);
+      const directNeighbors = new Set<string>();
+      directNeighbors.add(result.id);
+      graphData.edges.forEach((edge: any) => {
+        if (edge.from === result.id) directNeighbors.add(edge.to);
+        if (edge.to === result.id) directNeighbors.add(edge.from);
+      });
+      setHighlightedNodes(directNeighbors);
     } catch (err: any) {
       setError(err.message || '加载节点失败');
     } finally {
@@ -168,10 +171,13 @@ export function GraphView() {
         setGraphData(graphData);
         setSelectedLabel(null);
         
-        const relatedNodeIds = new Set<string>();
-        nodeIds.forEach(id => relatedNodeIds.add(id));
-        graphData.nodes.forEach((n: any) => relatedNodeIds.add(n.id));
-        setHighlightedNodes(relatedNodeIds);
+        const directNeighbors = new Set<string>();
+        nodeIds.forEach(id => directNeighbors.add(id));
+        graphData.edges.forEach((edge: any) => {
+          if (nodeIds.includes(edge.from)) directNeighbors.add(edge.to);
+          if (nodeIds.includes(edge.to)) directNeighbors.add(edge.from);
+        });
+        setHighlightedNodes(directNeighbors);
       }
     } catch (err: any) {
       setError(err.message || '搜索失败');

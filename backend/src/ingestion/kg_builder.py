@@ -1,6 +1,8 @@
+import hashlib
 import json
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
+from dataclasses import field
 
 from loguru import logger
 
@@ -12,6 +14,7 @@ from .text_splitter import TextChunk
 from .embedding import EmbeddingClient, get_embedding_client
 from .medical_processor import MedicalTextProcessor
 from .knowledge_fusion import KnowledgeFusionEngine
+from .medical_ner import MedicalNER
 
 
 @dataclass
@@ -40,13 +43,22 @@ class KnowledgeGraphBuilder:
         self,
         neo4j_client: Optional[Neo4jClient] = None,
         embedding_client: Optional[EmbeddingClient] = None,
+        use_ner: bool = True,
     ):
         self.neo4j_client = neo4j_client
         self.embedding_client = embedding_client
         self.medical_processor = MedicalTextProcessor()
         self.fusion_engine = KnowledgeFusionEngine()
+        self.ner = MedicalNER() if use_ner else None
+        self.use_ner = use_ner
         self._medical_entity_types = {e.value for e in MedicalEntityType}
         self._medical_relation_types = {r.value for r in MedicalRelationshipType}
+        self._stats = {
+            "documents_skipped": 0,
+            "chunks_skipped": 0,
+            "entities_skipped": 0,
+            "embeddings_cached_hits": 0,
+        }
 
     def _get_neo4j_client(self) -> Neo4jClient:
         if self.neo4j_client is None:
@@ -60,11 +72,72 @@ class KnowledgeGraphBuilder:
             self.embedding_client = get_embedding_client()
         return self.embedding_client
 
+    def get_stats(self) -> Dict[str, int]:
+        """获取缓存命中统计"""
+        return self._stats.copy()
+
+    def reset_stats(self):
+        """重置统计计数器"""
+        self._stats = {
+            "documents_skipped": 0,
+            "chunks_skipped": 0,
+            "entities_skipped": 0,
+            "embeddings_cached_hits": 0,
+        }
+
+    def _check_document_duplicate(self, content_hash: str) -> Optional[str]:
+        """检查是否存在相同内容的文档
+
+        Args:
+            content_hash: 文档内容的SHA256哈希
+
+        Returns:
+            已存在文档的ID，如果不存在则返回None
+        """
+        client = self._get_neo4j_client()
+        query = """
+        MATCH (d:Document)
+        WHERE d.content_hash = $content_hash
+        RETURN d.id as existing_id
+        LIMIT 1
+        """
+        try:
+            results = client.execute_query(query, {"content_hash": content_hash})
+            if results:
+                return results[0]["existing_id"]
+        except Exception as e:
+            logger.warning(f"Failed to check document duplicate by content_hash: {e}")
+        
+        return None
+
+    def _check_document_exists_by_id(self, document_id: str) -> bool:
+        """检查文档ID是否已存在
+
+        Args:
+            document_id: 文档ID
+
+        Returns:
+            如果文档存在则返回True
+        """
+        client = self._get_neo4j_client()
+        query = """
+        MATCH (d:Document {id: $document_id})
+        RETURN d.id as existing_id
+        LIMIT 1
+        """
+        try:
+            results = client.execute_query(query, {"document_id": document_id})
+            return bool(results)
+        except Exception as e:
+            logger.warning(f"Failed to check document by ID: {e}")
+        return False
+
     def ingest_document(
         self,
         document: Document,
         extract_entities: bool = True,
         create_embeddings: bool = True,
+        skip_duplicate: bool = True,
     ) -> Dict[str, Any]:
         """将文档摄入到知识图谱
 
@@ -72,12 +145,45 @@ class KnowledgeGraphBuilder:
             document: 要摄入的文档
             extract_entities: 是否提取实体和关系
             create_embeddings: 是否创建文本块嵌入
+            skip_duplicate: 是否跳过重复文档（基于内容hash）
 
         Returns:
             摄入结果，包含文档ID、创建的文本块数、提取的实体数和创建的关系数
         """
+        content_hash = hashlib.sha256(document.content.encode()).hexdigest()
+
+        if skip_duplicate:
+            existing_by_id = self._check_document_exists_by_id(document.id)
+            if existing_by_id:
+                logger.info(f"Document with ID '{document.id}' already exists, skipping")
+                self._stats["documents_skipped"] += 1
+                return {
+                    "document_id": document.id,
+                    "status": "duplicate_skipped",
+                    "existing_document_id": document.id,
+                    "chunks_created": 0,
+                    "entities_extracted": 0,
+                    "relationships_created": 0,
+                    "skipped": True,
+                }
+            
+            existing_by_hash = self._check_document_duplicate(content_hash)
+            if existing_by_hash and existing_by_hash != document.id:
+                logger.info(f"Document with same content already exists: {existing_by_hash}, skipping")
+                self._stats["documents_skipped"] += 1
+                return {
+                    "document_id": document.id,
+                    "status": "duplicate_skipped",
+                    "existing_document_id": existing_by_hash,
+                    "chunks_created": 0,
+                    "entities_extracted": 0,
+                    "relationships_created": 0,
+                    "skipped": True,
+                }
+
         results = {
             "document_id": document.id,
+            "status": "success",
             "chunks_created": 0,
             "entities_extracted": 0,
             "relationships_created": 0,
@@ -92,9 +198,22 @@ class KnowledgeGraphBuilder:
         self._create_document_node(document)
 
         # 分割文档为文本块
-        from .text_splitter import TextSplitter
+        from .text_splitter import TextSplitter, select_chunking_strategy
 
-        splitter = TextSplitter()
+        strategy_name = settings.split_strategy
+        if strategy_name == "auto":
+            strategy = select_chunking_strategy(document.content, settings.domain)
+        else:
+            from .text_splitter import SplitStrategy
+            strategy = SplitStrategy(strategy_name)
+
+        logger.info(f"Using chunking strategy: {strategy.value} for document {document.id}")
+
+        splitter = TextSplitter(
+            chunk_size=settings.chunk_size,
+            chunk_overlap=settings.chunk_overlap,
+            strategy=strategy,
+        )
         chunks = splitter.split_text(document.content, document.id)
         results["chunks_created"] = len(chunks)
 
@@ -187,11 +306,15 @@ class KnowledgeGraphBuilder:
     def _create_document_node(self, document: Document):
         """Create document node in Neo4j"""
         client = self._get_neo4j_client()
+        content_hash = hashlib.sha256(document.content.encode()).hexdigest()
         query = """
         MERGE (d:Document {id: $id})
         SET d.title = $title,
             d.content = $content,
-            d.metadata = $metadata
+            d.metadata = $metadata,
+            d.content_hash = $content_hash,
+            d.created_at = CASE WHEN d.created_at IS NULL THEN timestamp() ELSE d.created_at END,
+            d.updated_at = timestamp()
         """
         client.execute_query(
             query,
@@ -200,6 +323,7 @@ class KnowledgeGraphBuilder:
                 "title": document.title,
                 "content": document.content,
                 "metadata": json.dumps(document.metadata),
+                "content_hash": content_hash,
             },
         )
 
@@ -237,7 +361,10 @@ class KnowledgeGraphBuilder:
     def _extract_entities_from_chunk(
         self, chunk: TextChunk
     ) -> tuple[List[Entity], List[Relationship]]:
-        """使用LLM从文本块中提取实体和关系
+        """使用 NER + LLM 从文本块中提取实体和关系
+
+        医疗领域优先使用 NER 模型（快速、低成本），LLM 作为补充。
+        通用领域使用 LLM 提取。
 
         Args:
             chunk: 要提取实体和关系的文本块
@@ -245,6 +372,35 @@ class KnowledgeGraphBuilder:
         Returns:
             提取的实体列表和关系列表
         """
+        settings = get_settings()
+
+        if settings.domain == "medical" and self.use_ner and self.ner:
+            return self._extract_with_ner(chunk)
+
+        return self._extract_with_llm(chunk)
+
+    def _extract_with_ner(
+        self, chunk: TextChunk
+    ) -> tuple[List[Entity], List[Relationship]]:
+        """使用 NER 模型提取实体，基于共现关系推断简单关系"""
+        ner_entities = self.ner.extract(chunk.content)
+
+        entities = [
+            Entity(name=e.name, type=e.entity_type, properties={"confidence": e.confidence})
+            for e in ner_entities
+        ]
+
+        relationships = self._infer_relationships_from_cooccurrence(ner_entities, chunk.content)
+
+        logger.info(
+            f"NER extracted {len(entities)} entities and {len(relationships)} relationships"
+        )
+        return entities, relationships
+
+    def _extract_with_llm(
+        self, chunk: TextChunk
+    ) -> tuple[List[Entity], List[Relationship]]:
+        """使用 LLM 从文本块中提取实体和关系"""
         from langchain_openai import ChatOpenAI
         from langchain_core.prompts import ChatPromptTemplate
         import json as _json
@@ -306,7 +462,6 @@ class KnowledgeGraphBuilder:
             result = chain.invoke({"text": chunk.content})
             content = result.content
 
-            # 解析响应中的JSON
             json_start = content.find("{")
             json_end = content.rfind("}") + 1
             if json_start >= 0 and json_end > json_start:
@@ -339,8 +494,51 @@ class KnowledgeGraphBuilder:
             logger.error(f"LLM extraction failed: {e}")
             return [], []
 
+    def _infer_relationships_from_cooccurrence(
+        self, entities: list, text: str
+    ) -> List[Relationship]:
+        """基于共现和医疗本体约束推断简单关系"""
+        from ..core.medical_schema import MEDICAL_SCHEMA
+
+        relationships = []
+        seen_rels = set()
+
+        allowed_relations = MEDICAL_SCHEMA.get('allowed_relations', {})
+
+        for i, e1 in enumerate(entities):
+            for e2 in entities[i + 1:]:
+                src_type = e1.entity_type
+                tgt_type = e2.entity_type
+
+                if src_type in allowed_relations and tgt_type in allowed_relations.get(src_type, {}):
+                    rel_types = allowed_relations[src_type][tgt_type]
+                    if rel_types:
+                        rel_key = (e1.name.lower(), e2.name.lower(), rel_types[0])
+                        if rel_key not in seen_rels:
+                            seen_rels.add(rel_key)
+                            relationships.append(Relationship(
+                                source=e1.name,
+                                target=e2.name,
+                                type=rel_types[0],
+                                properties={"inferred": True, "confidence": 0.6},
+                            ))
+
+                        rel_key_rev = (e2.name.lower(), e1.name.lower(), rel_types[0])
+                        if rel_key_rev not in seen_rels:
+                            seen_rels.add(rel_key_rev)
+                            relationships.append(Relationship(
+                                source=e2.name,
+                                target=e1.name,
+                                type=rel_types[0],
+                                properties={"inferred": True, "confidence": 0.6},
+                            ))
+
+        return relationships
+
     def _create_entity_node(self, entity: Entity):
         """在Neo4j中创建实体节点（支持医疗领域的特定标签）
+
+        如果实体已存在且包含嵌入，则跳过嵌入生成以节省API调用。
 
         Args:
             entity: 要创建的实体
@@ -348,37 +546,98 @@ class KnowledgeGraphBuilder:
         client = self._get_neo4j_client()
         settings = get_settings()
 
+        embedding = None
+        entity_existed = False
+
         if settings.domain == "medical" and entity.type in self._medical_entity_types:
             labels = f"Entity:{entity.type}"
-            query = f"""
-            MERGE (e:{labels} {{name: $name}})
-            ON CREATE SET e.properties = $properties
-            ON MATCH SET e.properties = CASE
-                WHEN e.properties IS NULL THEN $properties
-                ELSE e.properties + $merge_props
-            END
+            check_query = f"""
+            MATCH (e:{labels} {{name: $name}})
+            RETURN e.embedding as embedding
             """
         else:
-            query = """
-            MERGE (e:Entity {name: $name})
-            ON CREATE SET e.type = $type, e.properties = $properties
-            ON MATCH SET
-                e.type = CASE WHEN e.type IS NULL THEN $type ELSE e.type END,
-                e.properties = CASE
-                    WHEN e.properties IS NULL THEN $properties
-                    ELSE e.properties + $merge_props
-                END
+            check_query = """
+            MATCH (e:Entity {name: $name})
+            RETURN e.embedding as embedding
             """
 
-        client.execute_query(
-            query,
-            {
-                "name": entity.name,
-                "type": entity.type,
-                "properties": json.dumps(entity.properties),
-                "merge_props": json.dumps(entity.properties),
-            },
-        )
+        try:
+            existing_results = client.execute_query(check_query, {"name": entity.name})
+            if existing_results and existing_results[0].get("embedding"):
+                entity_existed = True
+                logger.debug(f"Entity '{entity.name}' already exists with embedding, skipping")
+                self._stats["entities_skipped"] += 1
+                self._stats["embeddings_cached_hits"] += 1
+        except Exception as e:
+            logger.warning(f"Failed to check existing entity: {e}")
+
+        if not entity_existed:
+            try:
+                embedding_client = self.embedding_client or get_embedding_client()
+                embedding = embedding_client.embed_text(entity.name)
+            except Exception as e:
+                logger.warning(f"Failed to create embedding for entity '{entity.name}': {e}")
+
+        if settings.domain == "medical" and entity.type in self._medical_entity_types:
+            labels = f"Entity:{entity.type}"
+            if embedding is not None:
+                query = f"""
+                MERGE (e:{labels} {{name: $name}})
+                ON CREATE SET e.properties = $properties, e.type = $type, e.embedding = $embedding
+                ON MATCH SET 
+                    e.properties = CASE
+                        WHEN e.properties IS NULL THEN $properties
+                        ELSE e.properties + $merge_props
+                    END,
+                    e.type = CASE WHEN e.type IS NULL THEN $type ELSE e.type END,
+                    e.embedding = CASE WHEN e.embedding IS NULL THEN $embedding ELSE e.embedding END
+                """
+            else:
+                query = f"""
+                MERGE (e:{labels} {{name: $name}})
+                ON CREATE SET e.properties = $properties, e.type = $type
+                ON MATCH SET 
+                    e.properties = CASE
+                        WHEN e.properties IS NULL THEN $properties
+                        ELSE e.properties + $merge_props
+                    END,
+                    e.type = CASE WHEN e.type IS NULL THEN $type ELSE e.type END
+                """
+        else:
+            if embedding is not None:
+                query = """
+                MERGE (e:Entity {name: $name})
+                ON CREATE SET e.type = $type, e.properties = $properties, e.embedding = $embedding
+                ON MATCH SET
+                    e.type = CASE WHEN e.type IS NULL THEN $type ELSE e.type END,
+                    e.properties = CASE
+                        WHEN e.properties IS NULL THEN $properties
+                        ELSE e.properties + $merge_props
+                    END,
+                    e.embedding = CASE WHEN e.embedding IS NULL THEN $embedding ELSE e.embedding END
+                """
+            else:
+                query = """
+                MERGE (e:Entity {name: $name})
+                ON CREATE SET e.type = $type, e.properties = $properties
+                ON MATCH SET
+                    e.type = CASE WHEN e.type IS NULL THEN $type ELSE e.type END,
+                    e.properties = CASE
+                        WHEN e.properties IS NULL THEN $properties
+                        ELSE e.properties + $merge_props
+                    END
+                """
+
+        params = {
+            "name": entity.name,
+            "type": entity.type,
+            "properties": json.dumps(entity.properties),
+            "merge_props": json.dumps(entity.properties),
+        }
+        if embedding is not None:
+            params["embedding"] = embedding
+
+        client.execute_query(query, params)
 
     def _link_entity_to_chunk(self, entity_name: str, chunk_id: str):
         """Link entity to chunk in Neo4j"""
@@ -437,7 +696,9 @@ class KnowledgeGraphBuilder:
         )
 
     def _create_chunk_embeddings_batch(self, chunks: List[TextChunk]):
-        """批量创建所有文本块的嵌入（单次API调用）
+        """批量创建文本块的嵌入（带缓存检查）
+
+        对于已有嵌入的文本块，跳过API调用以节省资源。
 
         Args:
             chunks: 要创建嵌入的文本块列表
@@ -445,33 +706,69 @@ class KnowledgeGraphBuilder:
         client = self._get_neo4j_client()
         embedding_client = self._get_embedding_client()
 
-        texts = [chunk.content for chunk in chunks]
+        chunks_to_embed = []
+        chunks_to_embed_indices = []
+        results = []
+
+        for i, chunk in enumerate(chunks):
+            check_query = """
+            MATCH (c:Chunk {id: $chunk_id})
+            RETURN c.embedding as embedding
+            """
+            try:
+                existing = client.execute_query(check_query, {"chunk_id": chunk.id})
+                if existing and existing[0].get("embedding"):
+                    results.append((i, existing[0]["embedding"]))
+                    self._stats["embeddings_cached_hits"] += 1
+                    logger.debug(f"Chunk '{chunk.id}' already has embedding, using cached")
+                    continue
+            except Exception as e:
+                logger.warning(f"Failed to check chunk embedding: {e}")
+
+            chunks_to_embed.append(chunk)
+            chunks_to_embed_indices.append(i)
+
+        self._stats["chunks_skipped"] += len(results)
+
+        if not chunks_to_embed:
+            logger.info(f"All {len(chunks)} chunks already have embeddings, skipping API calls")
+            return results
+
+        logger.info(f"Creating embeddings for {len(chunks_to_embed)}/{len(chunks)} chunks (cached: {len(results)})")
+
+        texts = [chunk.content for chunk in chunks_to_embed]
         try:
-            embeddings = embedding_client.embed_texts(texts)
+            new_embeddings = embedding_client.embed_texts(texts)
+            for idx, embedding in zip(chunks_to_embed_indices, new_embeddings):
+                if embedding:
+                    results.append((idx, embedding))
         except Exception as e:
-            logger.error(f"Batch embedding failed, falling back to serial: {e}")
-            # 回退：逐个嵌入
-            embeddings = []
+            logger.error(f"Batch embedding failed: {e}")
+            new_embeddings = []
             for text in texts:
                 try:
-                    embeddings.append(embedding_client.embed_text(text))
+                    new_embeddings.append(embedding_client.embed_text(text))
                 except Exception as inner_e:
                     logger.error(f"Single embedding failed: {inner_e}")
-                    embeddings.append([])
+                    new_embeddings.append([])
 
-        # 将嵌入写入Neo4j
-        query = """
+            for idx, embedding in zip(chunks_to_embed_indices, new_embeddings):
+                if embedding:
+                    results.append((idx, embedding))
+
+        embed_query = """
         MATCH (c:Chunk {id: $chunk_id})
         SET c.embedding = $embedding
         """
-        for chunk, embedding in zip(chunks, embeddings):
+        new_results = results[len(chunks_to_embed_indices):]
+        for chunk, (idx, embedding) in zip(chunks_to_embed, new_results):
             if embedding:
                 try:
-                    client.execute_query(query, {"chunk_id": chunk.id, "embedding": embedding})
+                    client.execute_query(embed_query, {"chunk_id": chunk.id, "embedding": embedding})
                 except Exception as e:
                     logger.error(f"Failed to store embedding for chunk {chunk.id}: {e}")
 
-        logger.info(f"Stored {len([e for e in embeddings if e])} embeddings in batch")
+        logger.info(f"Stored {len([e for _, e in results if e])} embeddings in batch")
 
     def create_vector_index(self, index_name: str = "chunk_vector_index"):
         """为文本块创建向量索引（Neo4j 5.x / 2026.x 语法）

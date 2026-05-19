@@ -12,9 +12,16 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.main import app
+from src.core.cache import clear_all_caches
 
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def clear_cache():
+    clear_all_caches()
+    yield
 
 
 class TestHealthAPI:

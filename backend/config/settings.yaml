@@ -35,9 +35,9 @@ cache:
   max_size: 1000
 
 document:
-  chunk_size: 1000
-  chunk_overlap: 200
-  split_strategy: hybrid  # paragraph, sentence, markdown, hybrid
+  chunk_size: 512
+  chunk_overlap: 75
+  split_strategy: auto  # auto, paragraph, sentence, markdown, hybrid, medical, semantic, hierarchical
   keep_code_blocks: true
   keep_headers: true
   supported_formats:

@@ -6,6 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from loguru import logger
 
 from ..utils.logger import get_request_id
+from ..core.metrics import get_metrics_middleware
 
 
 class ErrorHandlingMiddleware(BaseHTTPMiddleware):
@@ -33,6 +34,14 @@ class RequestTimingMiddleware(BaseHTTPMiddleware):
         duration_ms = (time.perf_counter() - start_time) * 1000
 
         response.headers["X-Response-Time"] = f"{duration_ms:.2f}ms"
+
+        metrics = get_metrics_middleware()
+        metrics.record_request(
+            method=request.method,
+            path=request.url.path,
+            status_code=response.status_code,
+            duration_ms=duration_ms,
+        )
 
         if duration_ms > 1000:
             logger.warning(

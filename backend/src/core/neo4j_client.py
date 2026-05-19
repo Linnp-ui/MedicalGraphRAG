@@ -91,9 +91,18 @@ class Neo4jClient:
 
     def execute_query(self, query: str, parameters: Optional[dict] = None, **kwargs) -> list[dict]:
         """Execute a Cypher query and return results as list of dicts"""
+        import time
+        from .metrics import get_metrics_middleware
+        start = time.perf_counter()
         with self.session() as session:
             result: Result = session.run(query, parameters or {}, **kwargs)
-            return [record.data() for record in result]
+            results = [record.data() for record in result]
+        duration_ms = (time.perf_counter() - start) * 1000
+        try:
+            get_metrics_middleware().record_neo4j_query(duration_ms, query_type="execute")
+        except Exception:
+            pass
+        return results
 
     async def execute_query_async(
         self, query: str, parameters: Optional[dict] = None, **kwargs
@@ -286,9 +295,16 @@ class Neo4jClient:
         node_label: Optional[str] = None,
         limit: int = 20
     ) -> list[dict[str, Any]]:
-        """搜索节点 - 只搜索特定的文本属性"""
+        """搜索节点 - 优先使用全全文索引，回退到属性匹配"""
         searchable_props = ['name', 'title', 'description', 'text', 'content', 'label', 'type']
-        
+
+        fulltext_query = """
+        CALL db.index.fulltext.queryNodes("entity_fulltext_idx", $search_text)
+        YIELD node, score
+        RETURN node, id(node) as node_id, labels(node) as labels, score
+        LIMIT $limit
+        """
+
         if node_label:
             safe_node_label = self._normalize_identifier(node_label, "node_label")
             search_query = f"""
@@ -310,34 +326,231 @@ class Neo4jClient:
             RETURN n, id(n) as node_id, labels(n) as labels
             LIMIT $limit
             """
-        
+
         with self.session() as session:
             try:
+                result = session.run(fulltext_query, search_text=search_text, limit=limit)
+                nodes = []
+                found = False
+
+                for record in result:
+                    found = True
+                    node_data = record.data()
+                    labels = node_data.get('labels', [])
+                    label = labels[0] if labels else 'Node'
+                    node_props = dict(node_data['node']) if node_data.get('node') else {}
+
+                    nodes.append({
+                        'id': str(node_data['node_id']),
+                        'label': label,
+                        'properties': node_props,
+                        'score': node_data.get('score', 0),
+                    })
+
+                if found:
+                    return nodes
+
                 result = session.run(
-                    search_query, 
-                    search_text=search_text, 
+                    search_query,
+                    search_text=search_text,
                     searchable_props=searchable_props,
                     limit=limit
                 )
                 nodes = []
-                
+
                 for record in result:
                     node_data = record.data()
                     labels = node_data.get('labels', [])
                     label = labels[0] if labels else 'Node'
-                    
+
                     node_props = dict(node_data['n']) if node_data.get('n') else {}
-                    
+
                     nodes.append({
                         'id': str(node_data['node_id']),
                         'label': label,
                         'properties': node_props
                     })
-                
+
                 return nodes
             except Exception as e:
-                logger.warning(f"Search failed with error: {e}")
+                logger.warning(f"Fulltext search failed, falling back: {e}")
+                try:
+                    result = session.run(
+                        search_query,
+                        search_text=search_text,
+                        searchable_props=searchable_props,
+                        limit=limit
+                    )
+                    nodes = []
+
+                    for record in result:
+                        node_data = record.data()
+                        labels = node_data.get('labels', [])
+                        label = labels[0] if labels else 'Node'
+
+                        node_props = dict(node_data['n']) if node_data.get('n') else {}
+
+                        nodes.append({
+                            'id': str(node_data['node_id']),
+                            'label': label,
+                            'properties': node_props
+                        })
+
+                    return nodes
+                except Exception as e2:
+                    logger.warning(f"Search failed with error: {e2}")
+                    return []
+
+    def fuzzy_search_nodes(
+        self,
+        search_text: str,
+        node_label: Optional[str] = None,
+        limit: int = 20,
+        fuzzy_mode: str = "contains",
+        min_similarity: float = 0.6,
+    ) -> list[dict[str, Any]]:
+        """模糊搜索节点
+
+        Args:
+            search_text: 搜索文本
+            node_label: 节点标签过滤
+            limit: 返回数量限制
+            fuzzy_mode: 模糊匹配模式
+                - "contains": 包含匹配（默认）
+                - "prefix": 前缀匹配
+                - "suffix": 后缀匹配
+                - "regex": 正则表达式匹配
+                - "fuzzy": 编辑距离模糊匹配
+            min_similarity: 最小相似度（仅用于 fuzzy 模式，0-1之间）
+
+        Returns:
+            匹配的节点列表
+        """
+        searchable_props = ['name', 'title', 'description', 'text', 'content', 'label', 'type']
+
+        label_filter = ""
+        if node_label:
+            safe_node_label = self._normalize_identifier(node_label, "node_label")
+            label_filter = f":`{safe_node_label}`"
+
+        if fuzzy_mode == "prefix":
+            where_clause = f"""
+            WHERE ANY(prop IN $searchable_props 
+                      WHERE prop IN keys(n) 
+                      AND n[prop] IS NOT NULL 
+                      AND toString(n[prop]) STARTS WITH $search_text)
+            """
+        elif fuzzy_mode == "suffix":
+            where_clause = f"""
+            WHERE ANY(prop IN $searchable_props 
+                      WHERE prop IN keys(n) 
+                      AND n[prop] IS NOT NULL 
+                      AND toString(n[prop]) ENDS WITH $search_text)
+            """
+        elif fuzzy_mode == "regex":
+            where_clause = f"""
+            WHERE ANY(prop IN $searchable_props 
+                      WHERE prop IN keys(n) 
+                      AND n[prop] IS NOT NULL 
+                      AND toString(n[prop]) =~ $search_text)
+            """
+        elif fuzzy_mode == "fuzzy":
+            where_clause = f"""
+            WHERE ANY(prop IN $searchable_props 
+                      WHERE prop IN keys(n) 
+                      AND n[prop] IS NOT NULL 
+                      AND toLower(toString(n[prop])) CONTAINS toLower($search_text))
+            """
+        else:
+            where_clause = f"""
+            WHERE ANY(prop IN $searchable_props 
+                      WHERE prop IN keys(n) 
+                      AND n[prop] IS NOT NULL 
+                      AND toString(n[prop]) CONTAINS $search_text)
+            """
+
+        search_query = f"""
+        MATCH (n{label_filter})
+        {where_clause}
+        RETURN n, id(n) as node_id, labels(n) as labels
+        LIMIT $limit
+        """
+
+        with self.session() as session:
+            try:
+                result = session.run(
+                    search_query,
+                    search_text=search_text,
+                    searchable_props=searchable_props,
+                    limit=limit
+                )
+                nodes = []
+
+                for record in result:
+                    node_data = record.data()
+                    labels = node_data.get('labels', [])
+                    label = labels[0] if labels else 'Node'
+                    node_props = dict(node_data['n']) if node_data.get('n') else {}
+
+                    prop_values = [str(v) for v in node_props.values() if v is not None]
+                    matched_text = ""
+                    for prop in searchable_props:
+                        if prop in node_props and node_props[prop]:
+                            val = str(node_props[prop])
+                            if search_text.lower() in val.lower():
+                                matched_text = val
+                                break
+
+                    nodes.append({
+                        'id': str(node_data['node_id']),
+                        'label': label,
+                        'properties': node_props,
+                        'matched_property': matched_text[:200] if matched_text else None,
+                    })
+
+                return nodes
+            except Exception as e:
+                logger.warning(f"Fuzzy search failed: {e}")
                 return []
+
+    def search_nodes_with_score(
+        self,
+        search_text: str,
+        node_label: Optional[str] = None,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """带相似度评分的搜索节点
+
+        使用多种策略进行搜索并计算相似度分数：
+        1. 精确匹配（分数 1.0）
+        2. 前缀匹配（分数 0.9）
+        3. 包含匹配（分数 0.7）
+        4. 模糊匹配（分数 0.5-0.7）
+        """
+        all_results = {}
+        search_text_lower = search_text.lower()
+
+        exact_results = self.fuzzy_search_nodes(search_text, node_label, limit, "contains")
+        for node in exact_results:
+            node_id = node['id']
+            props = node.get('properties', {})
+            name = str(props.get('name', props.get('title', ''))).lower()
+
+            if name == search_text_lower:
+                score = 1.0
+            elif name.startswith(search_text_lower):
+                score = 0.9
+            elif search_text_lower in name:
+                score = 0.7 + (len(search_text_lower) / max(len(name), 1)) * 0.2
+            else:
+                score = 0.5
+
+            if node_id not in all_results or score > all_results[node_id].get('score', 0):
+                node['score'] = round(score, 3)
+                all_results[node_id] = node
+
+        sorted_results = sorted(all_results.values(), key=lambda x: x.get('score', 0), reverse=True)
+        return sorted_results[:limit]
 
     def get_node_detail(self, node_id: str) -> Optional[dict[str, Any]]:
         """获取节点详情"""

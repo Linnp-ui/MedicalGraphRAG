@@ -37,27 +37,27 @@ class MedicalIntentClassifier:
         self._llm = None
         
         self._intent_keywords = {
-            MedicalIntent.SYMPTOM_QUERY: ["症状", "什么原因", "为什么", "怎么回事", "怎么了", "出现", "表现", "持续"],
-            MedicalIntent.DISEASE_QUERY: ["是什么", "什么是", "定义", "病因", "病因", "并发症", "症状", "诊断"],
-            MedicalIntent.DRUG_QUERY: ["副作用", "用法", "用量", "服用", "药", "药物", "吃什么药", "能吃", "不能吃"],
-            MedicalIntent.TREATMENT_QUERY: ["治疗", "怎么治", "如何治", "疗法", "手术", "方案"],
-            MedicalIntent.DIAGNOSIS_ASSIST: ["我", "我有", "我最近", "可能", "怀疑", "检查", "诊断", "帮我看看"],
+            MedicalIntent.SYMPTOM_QUERY: ["症状", "原因", "为什么", "怎么回事", "怎么了", "出现", "表现", "持续", "怎么处理", "发作"],
+            MedicalIntent.DISEASE_QUERY: ["是什么", "什么是", "定义", "病因", "并发症", "诊断", "表现", "高危因素", "后遗症", "传播途径"],
+            MedicalIntent.DRUG_QUERY: ["副作用", "用法", "用量", "服用", "药", "药物", "吃什么药", "能吃", "不能吃", "治疗什么", "能治疗", "用于", "能治什么", "禁忌"],
+            MedicalIntent.TREATMENT_QUERY: ["治疗", "怎么治", "如何治", "疗法", "手术", "方案", "康复"],
+            MedicalIntent.DIAGNOSIS_ASSIST: ["我", "我有", "我最近", "可能", "怀疑", "检查", "诊断", "帮我看看", "怎么回事", "是什么病"],
             MedicalIntent.PREVENTION_QUERY: ["预防", "保健", "避免", "注意", "如何预防", "怎么预防"],
-            MedicalIntent.EXAMINATION_QUERY: ["检查", "化验", "检测", "做什么检查", "需要检查"],
-            MedicalIntent.HEALTH_ADVICE: ["建议", "怎么办", "应该", "注意什么", "怎么调理"],
-            MedicalIntent.MEDICAL_KNOWLEDGE: ["什么是", "解释", "是什么", "定义", "说明"],
+            MedicalIntent.EXAMINATION_QUERY: ["检查", "化验", "检测", "做什么检查", "需要检查", "空腹"],
+            MedicalIntent.HEALTH_ADVICE: ["建议", "怎么办", "应该", "注意什么", "怎么调理", "吃什么", "补什么", "饮食"],
+            MedicalIntent.MEDICAL_KNOWLEDGE: ["什么是", "解释", "定义", "说明"],
         }
         
         self._intent_descriptions = {
-            MedicalIntent.SYMPTOM_QUERY: "询问症状相关信息，如症状表现、原因、持续时间等。关键词：症状、什么原因、为什么、怎么回事",
-            MedicalIntent.DISEASE_QUERY: "询问疾病相关信息，如疾病定义、病因、症状、诊断等。关键词：是什么、什么是、病因、并发症",
-            MedicalIntent.DRUG_QUERY: "询问药物相关信息，如药物用途、副作用、用法用量等。关键词：副作用、用法、药、药物",
-            MedicalIntent.TREATMENT_QUERY: "询问治疗方案、治疗方法、手术方式等。关键词：治疗、怎么治、疗法、手术",
-            MedicalIntent.DIAGNOSIS_ASSIST: "请求辅助诊断，描述症状寻求可能的疾病判断。关键词：我、我有、可能、检查",
-            MedicalIntent.PREVENTION_QUERY: "询问疾病预防、健康保健、生活建议等。关键词：预防、保健、避免、注意",
-            MedicalIntent.EXAMINATION_QUERY: "询问检查检验项目相关信息。关键词：检查、化验、检测",
-            MedicalIntent.HEALTH_ADVICE: "寻求健康建议、生活方式指导等。关键词：建议、怎么办、应该",
-            MedicalIntent.MEDICAL_KNOWLEDGE: "询问医学知识、医学术语解释等。关键词：什么是、解释、定义",
+            MedicalIntent.SYMPTOM_QUERY: "询问症状相关信息，如症状表现、原因、持续时间等",
+            MedicalIntent.DISEASE_QUERY: "询问疾病相关信息，如疾病定义、病因、症状、诊断等",
+            MedicalIntent.DRUG_QUERY: "询问药物相关信息，如药物用途、副作用、用法用量等",
+            MedicalIntent.TREATMENT_QUERY: "询问治疗方案、治疗方法、手术方式等",
+            MedicalIntent.DIAGNOSIS_ASSIST: "请求辅助诊断，描述症状寻求可能的疾病判断",
+            MedicalIntent.PREVENTION_QUERY: "询问疾病预防、健康保健、生活建议等",
+            MedicalIntent.EXAMINATION_QUERY: "询问检查检验项目相关信息",
+            MedicalIntent.HEALTH_ADVICE: "寻求健康建议、生活方式指导等",
+            MedicalIntent.MEDICAL_KNOWLEDGE: "询问医学知识、医学术语解释等",
             MedicalIntent.UNKNOWN: "无法识别的意图",
         }
 
@@ -75,9 +75,21 @@ class MedicalIntentClassifier:
         """从问题中提取医疗实体"""
         entities = []
         
-        disease_list = ["高血压", "糖尿病", "心肌梗死", "肺炎", "感冒", "头痛", "头晕", "癌症", "肿瘤", "颈椎病"]
-        drug_list = ["阿司匹林", "布洛芬", "二甲双胍", "胰岛素", "硝苯地平", "氨氯地平", "格列齐特"]
-        symptom_list = ["头痛", "头晕", "发烧", "咳嗽", "恶心", "呕吐", "胸痛", "乏力"]
+        disease_list = [
+            "高血压", "糖尿病", "心肌梗死", "肺炎", "感冒", "头痛", "头晕", "癌症", "肿瘤", "颈椎病",
+            "肺癌", "乙肝", "胃炎", "脑梗死", "脑出血", "抑郁症", "贫血", "痛风", "肾结石",
+            "帕金森", "阿尔茨海默症", "骨质疏松", "咽炎", "失眠", "荨麻疹", "口腔溃疡", "流感",
+            "类风湿性关节炎", "支气管哮喘", "脂肪肝", "心肌梗死", "骨折", "甲状腺", "心血管疾病",
+            "哮喘"
+        ]
+        drug_list = [
+            "阿司匹林", "布洛芬", "二甲双胍", "胰岛素", "硝苯地平", "氨氯地平", "格列齐特",
+            "奥美拉唑", "硫糖铝", "秋水仙碱", "沙丁胺醇"
+        ]
+        symptom_list = [
+            "头痛", "头晕", "发烧", "咳嗽", "恶心", "呕吐", "胸痛", "乏力", "呼吸困难", "胸闷",
+            "腹泻", "失眠", "恶心", "呕吐", "口腔溃疡", "关节痛"
+        ]
         
         for disease in disease_list:
             if disease in question:
@@ -94,51 +106,25 @@ class MedicalIntentClassifier:
         return entities
 
     def _rule_based_classify(self, question: str) -> Optional[IntentResult]:
-        """基于规则的快速意图分类（作为LLM分类的补充）"""
+        """基于规则的快速意图分类"""
         entities = self._extract_entities_from_question(question)
         
-        # 特殊规则：以"我"开头且描述症状更可能是诊断辅助
-        if question.startswith("我") and any(kw in question for kw in ["头痛", "头晕", "发烧", "咳嗽", "不舒服", "症状"]):
-            return IntentResult(
-                intent=MedicalIntent.DIAGNOSIS_ASSIST,
-                confidence=0.85,
-                entities=entities,
-                slots={}
-            )
+        drug_list = [
+            "阿司匹林", "布洛芬", "二甲双胍", "胰岛素", "硝苯地平", "氨氯地平", "格列齐特",
+            "奥美拉唑", "硫糖铝", "秋水仙碱", "沙丁胺醇"
+        ]
+        disease_keywords = [
+            "高血压", "糖尿病", "心肌梗死", "肺炎", "感冒", "癌症", "肿瘤", "颈椎病",
+            "肺癌", "乙肝", "胃炎", "脑梗死", "脑出血", "抑郁症", "贫血", "痛风", "肾结石",
+            "帕金森", "阿尔茨海默症", "骨质疏松", "咽炎", "失眠", "荨麻疹", "口腔溃疡", "流感",
+            "类风湿性关节炎", "支气管哮喘", "脂肪肝", "心肌梗死", "骨折"
+        ]
+        symptom_keywords = [
+            "头痛", "头晕", "发烧", "咳嗽", "感冒", "疼痛", "恶心", "呕吐", "腹泻", "失眠",
+            "口腔溃疡", "关节痛", "哮喘"
+        ]
         
-        # "如何治疗"在疾病名称后归类为疾病查询
-        disease_keywords = ["高血压", "糖尿病", "心肌梗死", "肺炎", "感冒", "癌症", "肿瘤"]
-        if "治疗" in question or "怎么治" in question:
-            for disease in disease_keywords:
-                if disease in question:
-                    return IntentResult(
-                        intent=MedicalIntent.DISEASE_QUERY,
-                        confidence=0.9,
-                        entities=entities,
-                        slots={}
-                    )
-            # 如果没有明确疾病名但询问治疗方法，归类为治疗查询
-            return IntentResult(
-                intent=MedicalIntent.TREATMENT_QUERY,
-                confidence=0.8,
-                entities=entities,
-                slots={}
-            )
-        
-        # "怎么办"在症状后归类为症状查询
-        symptom_keywords = ["头痛", "头晕", "发烧", "咳嗽", "感冒", "发烧", "疼痛"]
-        if "怎么办" in question:
-            for symptom in symptom_keywords:
-                if symptom in question:
-                    return IntentResult(
-                        intent=MedicalIntent.SYMPTOM_QUERY,
-                        confidence=0.9,
-                        entities=entities,
-                        slots={}
-                    )
-        
-        # 药物名称出现在问题中，且询问"能治疗什么"或"用于"，归类为药物查询
-        drug_list = ["阿司匹林", "布洛芬", "二甲双胍", "胰岛素", "硝苯地平"]
+        # 药物名称出现在问题中 → 药物查询（优先级最高）
         for drug in drug_list:
             if drug in question:
                 return IntentResult(
@@ -148,8 +134,9 @@ class MedicalIntentClassifier:
                     slots={}
                 )
         
-        # 药物相关问题
-        if any(kw in question for kw in ["副作用", "用法", "用量", "服用", "药", "药物"]):
+        # 药物相关词汇 → 药物查询
+        drug_related_phrases = ["副作用", "用法", "用量", "服用", "药", "药物", "吃什么药", "能吃", "不能吃", "治疗什么", "能治疗", "用于", "能治什么", "禁忌"]
+        if any(kw in question for kw in drug_related_phrases):
             return IntentResult(
                 intent=MedicalIntent.DRUG_QUERY,
                 confidence=0.85,
@@ -157,17 +144,127 @@ class MedicalIntentClassifier:
                 slots={}
             )
         
-        # 疾病定义问题
-        if any(kw in question for kw in ["是什么", "什么是", "定义"]):
+        # "康复"相关的问题 → 治疗查询（高优先级）
+        if "康复" in question:
             return IntentResult(
-                intent=MedicalIntent.DISEASE_QUERY,
+                intent=MedicalIntent.TREATMENT_QUERY,
+                confidence=0.9,
+                entities=entities,
+                slots={}
+            )
+        
+        # "怎么办" + 症状 → 症状查询（非常高优先级）
+        if "怎么办" in question and any(symptom in question for symptom in symptom_keywords):
+            return IntentResult(
+                intent=MedicalIntent.SYMPTOM_QUERY,
+                confidence=0.95,
+                entities=entities,
+                slots={}
+            )
+        
+        # "发作" + "怎么处理" → 症状查询（非常高优先级）
+        if "发作" in question and "处理" in question:
+            return IntentResult(
+                intent=MedicalIntent.SYMPTOM_QUERY,
+                confidence=0.95,
+                entities=entities,
+                slots={}
+            )
+        
+        # "发作" + 症状 → 症状查询
+        if "发作" in question and any(symptom in question for symptom in symptom_keywords):
+            return IntentResult(
+                intent=MedicalIntent.SYMPTOM_QUERY,
+                confidence=0.9,
+                entities=entities,
+                slots={}
+            )
+        
+        # 以"我"开头的问题
+        if question.startswith("我"):
+            # 询问"是什么病"、"怎么回事"、"是什么原因" → 诊断辅助（寻求诊断）
+            if any(kw in question for kw in ["是怎么回事", "是什么病", "什么问题", "是什么原因"]):
+                return IntentResult(
+                    intent=MedicalIntent.DIAGNOSIS_ASSIST,
+                    confidence=0.9,
+                    entities=entities,
+                    slots={}
+                )
+            # 先检查"注意什么"、"吃什么" → 健康建议
+            if any(kw in question for kw in ["注意什么", "吃什么", "怎么补", "饮食"]):
+                return IntentResult(
+                    intent=MedicalIntent.HEALTH_ADVICE,
+                    confidence=0.85,
+                    entities=entities,
+                    slots={}
+                )
+            # 描述症状 → 诊断辅助
+            if any(kw in question for kw in symptom_keywords):
+                return IntentResult(
+                    intent=MedicalIntent.DIAGNOSIS_ASSIST,
+                    confidence=0.85,
+                    entities=entities,
+                    slots={}
+                )
+        
+        # "注意什么"、"吃什么"、"怎么补" → 健康建议
+        if any(kw in question for kw in ["注意什么", "吃什么", "怎么补", "饮食", "补什么"]):
+            return IntentResult(
+                intent=MedicalIntent.HEALTH_ADVICE,
                 confidence=0.85,
                 entities=entities,
                 slots={}
             )
         
-        # 症状原因问题
-        if any(kw in question for kw in ["原因", "为什么", "怎么回事"]):
+        # 疾病名称 + "有什么症状"、"高危因素"、"后遗症"、"传播途径" → 疾病查询
+        if any(kw in question for kw in ["有什么症状", "高危因素", "后遗症", "传播途径", "表现"]):
+            for disease in disease_keywords:
+                if disease in question:
+                    return IntentResult(
+                        intent=MedicalIntent.DISEASE_QUERY,
+                        confidence=0.9,
+                        entities=entities,
+                        slots={}
+                    )
+        
+        # 疾病名称 + "如何延缓"、"怎么治疗" → 疾病查询
+        if any(kw in question for kw in ["如何延缓", "怎么治疗"]) and any(disease in question for disease in disease_keywords):
+            return IntentResult(
+                intent=MedicalIntent.DISEASE_QUERY,
+                confidence=0.9,
+                entities=entities,
+                slots={}
+            )
+        
+        # "治疗"相关问题
+        if "治疗" in question or "怎么治" in question or "如何治" in question:
+            for disease in disease_keywords:
+                if disease in question:
+                    return IntentResult(
+                        intent=MedicalIntent.DISEASE_QUERY,
+                        confidence=0.9,
+                        entities=entities,
+                        slots={}
+                    )
+            return IntentResult(
+                intent=MedicalIntent.TREATMENT_QUERY,
+                confidence=0.8,
+                entities=entities,
+                slots={}
+            )
+        
+        # 疾病名称单独出现 + 询问相关 → 疾病查询
+        for disease in disease_keywords:
+            if disease in question and any(kw in question for kw in ["是什么", "什么是", "病因", "诊断", "传染", "如何", "多大"]):
+                return IntentResult(
+                    intent=MedicalIntent.DISEASE_QUERY,
+                    confidence=0.85,
+                    entities=entities,
+                    slots={}
+                )
+        
+        # "原因"、"为什么" → 症状查询
+        if any(kw in question for kw in ["原因", "为什么"]) and any(symptom in question for symptom in symptom_keywords):
             return IntentResult(
                 intent=MedicalIntent.SYMPTOM_QUERY,
                 confidence=0.8,
@@ -175,11 +272,38 @@ class MedicalIntentClassifier:
                 slots={}
             )
         
+        # 检查相关
+        if any(kw in question for kw in ["检查", "空腹", "化验", "需要检查"]):
+            return IntentResult(
+                intent=MedicalIntent.EXAMINATION_QUERY,
+                confidence=0.85,
+                entities=entities,
+                slots={}
+            )
+        
+        # 预防相关
+        if any(kw in question for kw in ["预防", "如何预防"]):
+            return IntentResult(
+                intent=MedicalIntent.PREVENTION_QUERY,
+                confidence=0.85,
+                entities=entities,
+                slots={}
+            )
+        
+        # 疾病名称单独出现 → 疾病查询
+        for disease in disease_keywords:
+            if disease in question:
+                return IntentResult(
+                    intent=MedicalIntent.DISEASE_QUERY,
+                    confidence=0.8,
+                    entities=entities,
+                    slots={}
+                )
+        
         return None
 
     def classify(self, question: str) -> IntentResult:
         """对医疗问题进行意图分类（先规则匹配，再LLM）"""
-        # 先尝试基于规则的快速分类
         rule_result = self._rule_based_classify(question)
         if rule_result:
             return rule_result
@@ -192,15 +316,16 @@ class MedicalIntentClassifier:
 分类优先级规则：
 1. 如果问题以"我"开头且描述症状，优先归类为诊断辅助(diagnosis_assist)
 2. 如果问题询问"如何治疗"或"治疗方法"，归类为治疗查询(treatment_query)
-3. 如果问题询问疾病的治疗，归类为疾病查询(disease_query)
+3. 如果问题询问疾病的治疗或症状，归类为疾病查询(disease_query)
 4. 如果问题询问药物相关，归类为药物查询(drug_query)
 5. 如果问题描述症状并询问原因，归类为症状查询(symptom_query)
+6. 如果问题询问健康建议如"注意什么"、"吃什么"，归类为健康建议(health_advice)
 
 请以JSON格式返回结果，包含以下字段：
 - intent: 意图类型（必须是上述列表中的一个）
 - confidence: 置信度（0-1之间的浮点数）
-- entities: 从问题中提取的医疗实体列表（如疾病名、症状名、药物名等）
-- slots: 关键槽位信息（如持续时间、年龄、性别等）
+- entities: 从问题中提取的医疗实体列表
+- slots: 关键槽位信息
 
 只返回JSON，不要有其他解释文字。"""
 
@@ -225,16 +350,19 @@ class MedicalIntentClassifier:
                 intent_str = data.get("intent", "unknown")
                 intent = MedicalIntent(intent_str) if intent_str in [e.value for e in MedicalIntent] else MedicalIntent.UNKNOWN
 
-                slots = data.get("slots", {})
-                for key, value in slots.items():
-                    if isinstance(value, list):
-                        slots[key] = ", ".join(str(v) for v in value)
+                slots_data = data.get("slots", {})
+                if isinstance(slots_data, dict):
+                    for key, value in list(slots_data.items()):
+                        if isinstance(value, list):
+                            slots_data[key] = ", ".join(str(v) for v in value)
+                else:
+                    slots_data = {}
 
                 return IntentResult(
                     intent=intent,
                     confidence=min(1.0, max(0.0, float(data.get("confidence", 0.5)))),
                     entities=data.get("entities", []),
-                    slots=slots,
+                    slots=slots_data,
                 )
             else:
                 return IntentResult(intent=MedicalIntent.UNKNOWN, confidence=0.5)

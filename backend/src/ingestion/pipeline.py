@@ -172,26 +172,14 @@ class DocumentProcessingPipeline:
         results = []
         stats = BatchProcessingStats(total_files=len(file_paths))
 
-        try:
-            from tqdm.asyncio import tqdm_asyncio
-            import nest_asyncio
-            nest_asyncio.apply()
-        except ImportError:
-            pass
-
         tasks = [self.process_document_async(fp) for fp in file_paths]
 
         if show_progress:
-            try:
-                for i, coro in enumerate(asyncio.as_completed(tasks)):
-                    result = await coro
-                    results.append(result)
-                    self._update_stats(stats, result)
-                    logger.info(f"Progress: {i + 1}/{len(tasks)} completed")
-            except RuntimeError:
-                results = await asyncio.gather(*tasks)
-                for result in results:
-                    self._update_stats(stats, result)
+            for i, coro in enumerate(asyncio.as_completed(tasks)):
+                result = await coro
+                results.append(result)
+                self._update_stats(stats, result)
+                logger.info(f"Progress: {i + 1}/{len(tasks)} completed")
         else:
             results = await asyncio.gather(*tasks)
             for result in results:

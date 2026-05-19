@@ -1,0 +1,98 @@
+{
+  "timestamp": "2026-05-18T23:40:18.733815",
+  "quality_metrics": {
+    "intent_accuracy": 0.875,
+    "entity_recall": 1.0,
+    "answer_relevance": 1.0,
+    "overall_score": 0.9583333333333334
+  },
+  "performance_metrics": {
+    "avg_response_time": 2.2967143058776855,
+    "max_response_time": 4.481942892074585,
+    "min_response_time": 1.1436817646026611,
+    "p95_response_time": 4.481942892074585,
+    "throughput": 0.43540461146640164
+  },
+  "detailed_results": [
+    {
+      "question": "高血压是什么疾病？",
+      "intent_correct": true,
+      "entities_found": 1,
+      "expected_entities": 1,
+      "answer_relevant": true,
+      "response_time": 3.178579092025757,
+      "error_occurred": false,
+      "error_message": ""
+    },
+    {
+      "question": "头痛有哪些原因？",
+      "intent_correct": true,
+      "entities_found": 1,
+      "expected_entities": 1,
+      "answer_relevant": true,
+      "response_time": 2.8495237827301025,
+      "error_occurred": false,
+      "error_message": ""
+    },
+    {
+      "question": "阿司匹林有什么副作用？",
+      "intent_correct": true,
+      "entities_found": 1,
+      "expected_entities": 1,
+      "answer_relevant": true,
+      "response_time": 2.4354140758514404,
+      "error_occurred": false,
+      "error_message": ""
+    },
+    {
+      "question": "我最近经常头痛头晕，可能是什么病？",
+      "intent_correct": true,
+      "entities_found": 2,
+      "expected_entities": 2,
+      "answer_relevant": true,
+      "response_time": 4.481942892074585,
+      "error_occurred": false,
+      "error_message": ""
+    },
+    {
+      "question": "糖尿病如何治疗？",
+      "intent_correct": true,
+      "entities_found": 1,
+      "expected_entities": 1,
+      "answer_relevant": true,
+      "response_time": 1.4092247486114502,
+      "error_occurred": false,
+      "error_message": ""
+    },
+    {
+      "question": "布洛芬能治疗什么？",
+      "intent_correct": false,
+      "entities_found": 1,
+      "expected_entities": 1,
+      "answer_relevant": true,
+      "response_time": 1.2050950527191162,
+      "error_occurred": false,
+      "error_message": ""
+    },
+    {
+      "question": "心肌梗死有什么症状？",
+      "intent_correct": true,
+      "entities_found": 1,
+      "expected_entities": 1,
+      "answer_relevant": true,
+      "response_time": 1.1436817646026611,
+      "error_occurred": false,
+      "error_message": ""
+    },
+    {
+      "question": "感冒发烧怎么办？",
+      "intent_correct": true,
+      "entities_found": 2,
+      "expected_entities": 2,
+      "answer_relevant": true,
+      "response_time": 1.670253038406372,
+      "error_occurred": false,
+      "error_message": ""
+    }
+  ]
+}

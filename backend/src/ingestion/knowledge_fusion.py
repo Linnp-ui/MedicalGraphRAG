@@ -1578,7 +1578,7 @@ class EntityDisambiguator:
         return common_chars / max_len
 
     def disambiguate(self, entities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """消歧实体列表 - 合并指称同一实体的不同表述"""
+        """消歧实体列表 - 合并指称同一实体的不同表述，支持多类型标签"""
         normalized_map = {}
         
         for entity in entities:
@@ -1590,11 +1590,14 @@ class EntityDisambiguator:
             if normalized_name not in normalized_map:
                 normalized_map[normalized_name] = {
                     "name": normalized_name,
-                    "type": entity_type,
+                    "types": [entity_type] if entity_type else [],
                     "properties": entity.get("properties", {}),
                     "original_names": [],
                     "sources": [],
                 }
+            
+            if entity_type and entity_type not in normalized_map[normalized_name]["types"]:
+                normalized_map[normalized_name]["types"].append(entity_type)
             
             if name not in normalized_map[normalized_name]["original_names"]:
                 normalized_map[normalized_name]["original_names"].append(name)
@@ -1602,6 +1605,12 @@ class EntityDisambiguator:
             source = entity.get("properties", {}).get("source")
             if source and source not in normalized_map[normalized_name]["sources"]:
                 normalized_map[normalized_name]["sources"].append(source)
+            
+            existing_props = normalized_map[normalized_name]["properties"]
+            new_props = entity.get("properties", {})
+            for key, value in new_props.items():
+                if key not in existing_props:
+                    existing_props[key] = value
         
         return list(normalized_map.values())
 
@@ -1716,7 +1725,7 @@ class KnowledgeFusionEngine:
         self.relation_aligner = RelationAligner()
 
     def fuse(self, entities: List[Dict[str, Any]], relationships: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-        """融合实体和关系"""
+        """融合实体和关系 - 支持多类型实体"""
         fused_entities = self.entity_disambiguator.disambiguate(entities)
         
         entity_name_map = {e["name"]: e for e in fused_entities}
@@ -1728,10 +1737,10 @@ class KnowledgeFusionEngine:
             relation_type = self.relation_aligner.align_relation(rel["type"])
             
             if source_name in entity_name_map and target_name in entity_name_map:
-                source_type = entity_name_map[source_name]["type"]
-                target_type = entity_name_map[target_name]["type"]
+                source_types = entity_name_map[source_name].get("types", [])
+                target_types = entity_name_map[target_name].get("types", [])
                 
-                if self.relation_aligner.validate_relation(source_type, target_type, relation_type):
+                if self._validate_multi_type_relation(source_types, target_types, relation_type):
                     fused_relationships.append({
                         "source": source_name,
                         "target": target_name,
@@ -1740,17 +1749,29 @@ class KnowledgeFusionEngine:
                     })
         
         return fused_entities, fused_relationships
+    
+    def _validate_multi_type_relation(self, source_types: List[str], target_types: List[str], relation_type: str) -> bool:
+        """验证多类型实体之间的关系是否符合本体约束"""
+        if not source_types or not target_types:
+            return False
+        
+        for source_type in source_types:
+            for target_type in target_types:
+                if self.relation_aligner.validate_relation(source_type, target_type, relation_type):
+                    return True
+        
+        return False
 
     def link_to_standard_ontology(self, entities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """链接实体到标准医学本体"""
+        """链接实体到标准医学本体 - 支持多类型实体"""
         linked_entities = []
         
         for entity in entities:
             linked = {**entity}
             entity_name = entity.get("name", "")
-            entity_type = entity.get("type", "")
+            entity_types = entity.get("types", [entity.get("type", "")])
             
-            if entity_type == "Disease" and entity_name in self.entity_disambiguator.icd10_mapping:
+            if "Disease" in entity_types and entity_name in self.entity_disambiguator.icd10_mapping:
                 linked["icd10_code"] = self.entity_disambiguator.icd10_mapping[entity_name]
             
             if entity_name in self.entity_disambiguator.umls_mapping:

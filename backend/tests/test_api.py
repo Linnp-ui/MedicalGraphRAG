@@ -144,8 +144,8 @@ class TestGraphAPI:
     def test_search_nodes_success(self, mock_get_client):
         """测试搜索节点成功"""
         mock_client = Mock()
-        mock_client.search_nodes.return_value = [
-            {"id": "1", "label": "Person", "properties": {"name": "张三"}}
+        mock_client.search_nodes_with_score.return_value = [
+            {"id": "1", "label": "Person", "properties": {"name": "张三"}, "score": 1.0}
         ]
         mock_get_client.return_value = mock_client
         
@@ -160,7 +160,7 @@ class TestGraphAPI:
     def test_search_nodes_empty_query(self, mock_get_client):
         """测试空查询字符串"""
         mock_client = Mock()
-        mock_client.search_nodes.return_value = []
+        mock_client.search_nodes_with_score.return_value = []
         mock_get_client.return_value = mock_client
         
         response = client.get("/api/v1/graph/search?query=")
@@ -172,15 +172,15 @@ class TestGraphAPI:
     def test_search_nodes_with_limit(self, mock_get_client):
         """测试搜索结果限制"""
         mock_client = Mock()
-        mock_client.search_nodes.return_value = [
-            {"id": str(i), "label": "Person", "properties": {"name": f"用户{i}"}}
+        mock_client.search_nodes_with_score.return_value = [
+            {"id": str(i), "label": "Person", "properties": {"name": f"用户{i}"}, "score": 1.0}
             for i in range(10)
         ]
         mock_get_client.return_value = mock_client
         
         response = client.get("/api/v1/graph/search?query=用户&limit=10")
         assert response.status_code == 200
-        _, kwargs = mock_client.search_nodes.call_args
+        _, kwargs = mock_client.search_nodes_with_score.call_args
         assert kwargs["limit"] == 10
     
     @patch('src.api.routes.get_neo4j_client')
@@ -312,6 +312,7 @@ class TestIngestAPI:
         
         mock_builder = Mock()
         mock_builder.ingest_document.return_value = {"status": "success", "nodes_created": 1}
+        mock_builder.get_stats.return_value = {"nodes_created": 1}
         mock_builder_class.return_value = mock_builder
         
         response = client.post(
@@ -341,6 +342,7 @@ class TestIngestAPI:
         
         mock_builder = Mock()
         mock_builder.ingest_document.return_value = {"status": "success", "nodes_created": 1}
+        mock_builder.get_stats.return_value = {"nodes_created": 2}
         mock_builder_class.return_value = mock_builder
         
         response = client.post(
@@ -357,19 +359,20 @@ class TestIngestAPI:
 class TestQueryAPI:
     """问答API测试"""
     
+    @patch('src.api.routes.run_workflow')
     @patch('src.api.routes.get_neo4j_client')
-    @patch('src.api.routes.HybridRetriever')
-    def test_query_success(self, mock_retriever_class, mock_get_client):
+    def test_query_success(self, mock_get_client, mock_run_workflow):
         """测试问答成功"""
         mock_client = Mock()
         mock_client.execute_query.return_value = []
         mock_get_client.return_value = mock_client
         
-        mock_retriever = Mock()
-        mock_retriever.search.return_value = {
-            "results": [{"content": "测试答案", "score": 0.9}]
+        mock_run_workflow.return_value = {
+            "question": "张三是谁？",
+            "answer": "测试答案",
+            "routing": "drift",
+            "documents": [{"content": "测试内容", "similarity": 0.9}]
         }
-        mock_retriever_class.return_value = mock_retriever
         
         response = client.post(
             "/api/v1/query",
@@ -449,7 +452,7 @@ class TestEdgeCases:
     def test_special_characters_in_search(self, mock_get_client):
         """测试搜索特殊字符"""
         mock_client = Mock()
-        mock_client.search_nodes.return_value = []
+        mock_client.search_nodes_with_score.return_value = []
         mock_get_client.return_value = mock_client
         
         response = client.get("/api/v1/graph/search?query=<script>alert('xss')</script>")
@@ -471,8 +474,8 @@ class TestEdgeCases:
     def test_unicode_search_query(self, mock_get_client):
         """测试Unicode搜索查询"""
         mock_client = Mock()
-        mock_client.search_nodes.return_value = [
-            {"id": "1", "label": "Person", "properties": {"name": "张三"}}
+        mock_client.search_nodes_with_score.return_value = [
+            {"id": "1", "label": "Person", "properties": {"name": "张三"}, "score": 1.0}
         ]
         mock_get_client.return_value = mock_client
         

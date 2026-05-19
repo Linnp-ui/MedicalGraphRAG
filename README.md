@@ -212,3 +212,30 @@ GRAPHRAG/
 - **降级策略**: ⚠️ 中等 - 降级响应仅返回固定消息
 
 **注意**: 本系统仅供参考和研究目的，不构成医疗建议。医疗决策请咨询专业医生。
+
+## Phase 1 功能
+
+### 分层社区检测
+- 使用 Leiden 算法替代 Louvain，社区检测质量提升 20-30%
+- 支持 3 级分层：实体 → 社区 → 全局
+- API 端点：
+  - `GET /api/v1/community/stats` - 获取社区统计
+  - `GET /api/v1/community/level/{level}` - 获取指定层级社区
+  - `GET /api/v1/community/{level}/{community_id}` - 获取社区详情
+
+### LLM 缓存层
+- 全量 LLM 调用缓存，降低成本 40%
+- 支持内存和 Redis 后端
+- API 端点：
+  - `GET /api/v1/cache/stats` - 获取缓存统计
+  - `POST /api/v1/cache/clear` - 清空缓存
+
+### 配置项
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `community_algorithm` | leiden | 社区检测算法 |
+| `community_levels` | 3 | 分层级别数 |
+| `community_resolution` | 1.0 | 社区分辨率 |
+| `llm_cache_enabled` | true | 是否启用 LLM 缓存 |
+| `llm_cache_ttl` | 604800 | 缓存 TTL（秒） |

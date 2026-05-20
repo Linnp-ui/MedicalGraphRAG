@@ -19,11 +19,18 @@ from .medical_ner import MedicalNER
 
 @dataclass
 class Entity:
-    """Entity data class"""
+    """Entity data class with multi-type support"""
 
     name: str
     type: str
     properties: Dict[str, Any]
+    types: List[str] = field(default_factory=list)
+
+    def __post_init__(self):
+        if not self.types:
+            self.types = [self.type] if self.type else []
+        elif self.type not in self.types:
+            self.types.insert(0, self.type)
 
 
 @dataclass
@@ -279,7 +286,14 @@ class KnowledgeGraphBuilder:
 
         # 将融合后的实体写入Neo4j
         for entity in fused_entity_map.values():
-            entity_obj = Entity(name=entity["name"], type=entity["type"], properties=entity["properties"])
+            entity_types = entity.get("types", [entity.get("type", "Entity")])
+            primary_type = entity_types[0] if entity_types else entity.get("type", "Entity")
+            entity_obj = Entity(
+                name=entity["name"], 
+                type=primary_type, 
+                properties=entity.get("properties", {}),
+                types=entity_types
+            )
             self._create_entity_node(entity_obj)
 
         # 将融合后的关系写入Neo4j
@@ -536,12 +550,12 @@ class KnowledgeGraphBuilder:
         return relationships
 
     def _create_entity_node(self, entity: Entity):
-        """在Neo4j中创建实体节点（支持医疗领域的特定标签）
+        """在Neo4j中创建实体节点（支持多标签）
 
         如果实体已存在且包含嵌入，则跳过嵌入生成以节省API调用。
 
         Args:
-            entity: 要创建的实体
+            entity: 要创建的实体（支持 types 多标签）
         """
         client = self._get_neo4j_client()
         settings = get_settings()
@@ -549,17 +563,10 @@ class KnowledgeGraphBuilder:
         embedding = None
         entity_existed = False
 
-        if settings.domain == "medical" and entity.type in self._medical_entity_types:
-            labels = f"Entity:{entity.type}"
-            check_query = f"""
-            MATCH (e:{labels} {{name: $name}})
-            RETURN e.embedding as embedding
-            """
-        else:
-            check_query = """
-            MATCH (e:Entity {name: $name})
-            RETURN e.embedding as embedding
-            """
+        check_query = """
+        MATCH (e:Entity {name: $name})
+        RETURN e.embedding as embedding
+        """
 
         try:
             existing_results = client.execute_query(check_query, {"name": entity.name})
@@ -578,66 +585,97 @@ class KnowledgeGraphBuilder:
             except Exception as e:
                 logger.warning(f"Failed to create embedding for entity '{entity.name}': {e}")
 
-        if settings.domain == "medical" and entity.type in self._medical_entity_types:
-            labels = f"Entity:{entity.type}"
-            if embedding is not None:
-                query = f"""
-                MERGE (e:{labels} {{name: $name}})
-                ON CREATE SET e.properties = $properties, e.type = $type, e.embedding = $embedding
-                ON MATCH SET 
-                    e.properties = CASE
-                        WHEN e.properties IS NULL THEN $properties
-                        ELSE e.properties + $merge_props
-                    END,
-                    e.type = CASE WHEN e.type IS NULL THEN $type ELSE e.type END,
-                    e.embedding = CASE WHEN e.embedding IS NULL THEN $embedding ELSE e.embedding END
-                """
-            else:
-                query = f"""
-                MERGE (e:{labels} {{name: $name}})
-                ON CREATE SET e.properties = $properties, e.type = $type
-                ON MATCH SET 
-                    e.properties = CASE
-                        WHEN e.properties IS NULL THEN $properties
-                        ELSE e.properties + $merge_props
-                    END,
-                    e.type = CASE WHEN e.type IS NULL THEN $type ELSE e.type END
-                """
+        valid_types = [t for t in entity.types if t in self._medical_entity_types] if settings.domain == "medical" else entity.types
+        if not valid_types:
+            valid_types = [entity.type] if entity.type else ["Entity"]
+
+        primary_type = valid_types[0] if valid_types else "Entity"
+        labels_str = ":".join(["Entity"] + valid_types)
+
+        if embedding is not None:
+            query = f"""
+            MERGE (e:Entity {{name: $name}})
+            ON CREATE SET 
+                e.properties = $properties, 
+                e.type = $type, 
+                e.types = $types,
+                e.embedding = $embedding
+            ON MATCH SET 
+                e.properties = CASE
+                    WHEN e.properties IS NULL THEN $properties
+                    ELSE e.properties + $merge_props
+                END,
+                e.type = CASE WHEN e.type IS NULL THEN $type ELSE e.type END,
+                e.types = CASE 
+                    WHEN e.types IS NULL THEN $types 
+                    ELSE apoc.coll.toSet(e.types + $types) 
+                END,
+                e.embedding = CASE WHEN e.embedding IS NULL THEN $embedding ELSE e.embedding END
+            WITH e
+            CALL apoc.create.addLabels(e, $additional_labels) YIELD node
+            RETURN node
+            """
         else:
-            if embedding is not None:
-                query = """
-                MERGE (e:Entity {name: $name})
-                ON CREATE SET e.type = $type, e.properties = $properties, e.embedding = $embedding
-                ON MATCH SET
-                    e.type = CASE WHEN e.type IS NULL THEN $type ELSE e.type END,
-                    e.properties = CASE
-                        WHEN e.properties IS NULL THEN $properties
-                        ELSE e.properties + $merge_props
-                    END,
-                    e.embedding = CASE WHEN e.embedding IS NULL THEN $embedding ELSE e.embedding END
-                """
-            else:
-                query = """
-                MERGE (e:Entity {name: $name})
-                ON CREATE SET e.type = $type, e.properties = $properties
-                ON MATCH SET
-                    e.type = CASE WHEN e.type IS NULL THEN $type ELSE e.type END,
-                    e.properties = CASE
-                        WHEN e.properties IS NULL THEN $properties
-                        ELSE e.properties + $merge_props
-                    END
-                """
+            query = f"""
+            MERGE (e:Entity {{name: $name}})
+            ON CREATE SET 
+                e.properties = $properties, 
+                e.type = $type,
+                e.types = $types
+            ON MATCH SET 
+                e.properties = CASE
+                    WHEN e.properties IS NULL THEN $properties
+                    ELSE e.properties + $merge_props
+                END,
+                e.type = CASE WHEN e.type IS NULL THEN $type ELSE e.type END,
+                e.types = CASE 
+                    WHEN e.types IS NULL THEN $types 
+                    ELSE apoc.coll.toSet(e.types + $types) 
+                END
+            WITH e
+            CALL apoc.create.addLabels(e, $additional_labels) YIELD node
+            RETURN node
+            """
 
         params = {
             "name": entity.name,
-            "type": entity.type,
+            "type": primary_type,
+            "types": valid_types,
             "properties": json.dumps(entity.properties),
             "merge_props": json.dumps(entity.properties),
+            "additional_labels": valid_types,
         }
         if embedding is not None:
             params["embedding"] = embedding
 
-        client.execute_query(query, params)
+        try:
+            client.execute_query(query, params)
+        except Exception as e:
+            logger.warning(f"Failed to add labels with APOC, falling back to basic query: {e}")
+            fallback_query = f"""
+            MERGE (e:{labels_str} {{name: $name}})
+            ON CREATE SET 
+                e.properties = $properties, 
+                e.type = $type,
+                e.types = $types
+            ON MATCH SET 
+                e.properties = CASE
+                    WHEN e.properties IS NULL THEN $properties
+                    ELSE e.properties + $merge_props
+                END,
+                e.type = CASE WHEN e.type IS NULL THEN $type ELSE e.type END,
+                e.types = CASE 
+                    WHEN e.types IS NULL THEN $types 
+                    ELSE $types 
+                END
+            """
+            if embedding is not None:
+                fallback_query = fallback_query.replace(
+                    "e.types = $types",
+                    "e.types = $types, e.embedding = CASE WHEN e.embedding IS NULL THEN $embedding ELSE e.embedding END"
+                )
+                params["embedding"] = embedding
+            client.execute_query(fallback_query, params)
 
     def _link_entity_to_chunk(self, entity_name: str, chunk_id: str):
         """Link entity to chunk in Neo4j"""

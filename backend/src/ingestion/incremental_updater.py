@@ -165,30 +165,72 @@ class IncrementalUpdater:
         return entity_count, relation_count
 
     def _upsert_entity(self, entity: Dict[str, Any], document_id: str):
-        """插入或更新实体"""
-        label = entity.get("label", "Entity")
+        """插入或更新实体（支持多标签）"""
+        labels = entity.get("labels", [entity.get("label", "Entity")])
+        if not labels:
+            labels = ["Entity"]
         name = entity.get("name", "")
+        primary_label = labels[0]
         
         cypher = f"""
-        MERGE (e:{label} {{name: $name}})
+        MERGE (e:Entity {{name: $name}})
         ON CREATE SET 
             e.created_at = $timestamp,
             e.source_document = $doc_id,
             e.version = 1,
-            e.confidence = $confidence
+            e.confidence = $confidence,
+            e.type = $primary_label,
+            e.types = $labels
         ON MATCH SET 
             e.updated_at = $timestamp,
             e.version = e.version + 1,
             e.source_document = $doc_id,
-            e.confidence = $confidence
+            e.confidence = $confidence,
+            e.types = CASE 
+                WHEN e.types IS NULL THEN $labels 
+                ELSE apoc.coll.toSet(e.types + $labels) 
+            END
+        WITH e
+        CALL apoc.create.addLabels(e, $labels) YIELD node
+        RETURN node
         """
 
-        self.neo4j_client.execute_query(cypher, {
-            "name": name,
-            "timestamp": datetime.now().isoformat(),
-            "doc_id": document_id,
-            "confidence": entity.get("confidence", 1.0)
-        })
+        try:
+            self.neo4j_client.execute_query(cypher, {
+                "name": name,
+                "timestamp": datetime.now().isoformat(),
+                "doc_id": document_id,
+                "confidence": entity.get("confidence", 1.0),
+                "primary_label": primary_label,
+                "labels": labels
+            })
+        except Exception as e:
+            logger.warning(f"APOC addLabels failed, using fallback: {e}")
+            labels_str = ":".join(["Entity"] + labels)
+            fallback_cypher = f"""
+            MERGE (e:{labels_str} {{name: $name}})
+            ON CREATE SET 
+                e.created_at = $timestamp,
+                e.source_document = $doc_id,
+                e.version = 1,
+                e.confidence = $confidence,
+                e.type = $primary_label,
+                e.types = $labels
+            ON MATCH SET 
+                e.updated_at = $timestamp,
+                e.version = e.version + 1,
+                e.source_document = $doc_id,
+                e.confidence = $confidence,
+                e.types = $labels
+            """
+            self.neo4j_client.execute_query(fallback_cypher, {
+                "name": name,
+                "timestamp": datetime.now().isoformat(),
+                "doc_id": document_id,
+                "confidence": entity.get("confidence", 1.0),
+                "primary_label": primary_label,
+                "labels": labels
+            })
 
     def _upsert_relation(self, relation: Dict[str, Any]) -> bool:
         """插入或更新关系"""

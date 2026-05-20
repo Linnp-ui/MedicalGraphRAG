@@ -21,6 +21,7 @@ class NEREntity:
     start_pos: int
     end_pos: int
     confidence: float
+    strategy: str = "unknown"
 
 
 class MedicalNER:
@@ -114,6 +115,8 @@ class MedicalNER:
         entities.extend(self._regex_match(text, seen_spans))
         entities.extend(self._suffix_match(text, seen_spans))
 
+        entities = self._cross_validate(entities)
+        
         entities.sort(key=lambda e: e.start_pos)
         entities = self._resolve_overlaps(entities)
 
@@ -147,6 +150,7 @@ class MedicalNER:
                         start_pos=pos,
                         end_pos=pos + len(entity_name),
                         confidence=0.95,
+                        strategy="exact_dict",
                     ))
                 start = pos + 1
 
@@ -171,6 +175,7 @@ class MedicalNER:
                             start_pos=pos,
                             end_pos=pos + len(word),
                             confidence=0.90,
+                            strategy="abbreviation",
                         ))
 
         return entities
@@ -190,6 +195,7 @@ class MedicalNER:
                         start_pos=match.start(),
                         end_pos=match.end(),
                         confidence=0.75,
+                        strategy="regex",
                     ))
 
         return entities
@@ -209,9 +215,59 @@ class MedicalNER:
                         start_pos=match.start(),
                         end_pos=match.end(),
                         confidence=0.70,
+                        strategy="suffix",
                     ))
 
         return entities
+
+    def _cross_validate(self, entities: List[NEREntity]) -> List[NEREntity]:
+        """多策略交叉验证 - 多策略匹配同一实体时提升置信度
+        
+        当多个策略匹配到同一实体（相同名称和类型）时，提升置信度：
+        - 2个策略匹配: +0.03
+        - 3个策略匹配: +0.05
+        - 4个策略匹配: +0.08
+        
+        同时记录验证状态到 properties
+        """
+        if not entities:
+            return entities
+        
+        entity_key_map: Dict[Tuple[str, str], List[NEREntity]] = {}
+        
+        for entity in entities:
+            key = (entity.name.lower(), entity.entity_type)
+            if key not in entity_key_map:
+                entity_key_map[key] = []
+            entity_key_map[key].append(entity)
+        
+        validated_entities = []
+        
+        for key, matching_entities in entity_key_map.items():
+            if len(matching_entities) == 1:
+                validated_entities.append(matching_entities[0])
+            else:
+                strategies = list(set(e.strategy for e in matching_entities))
+                num_strategies = len(strategies)
+                
+                confidence_boost = {
+                    2: 0.03,
+                    3: 0.05,
+                    4: 0.08,
+                }.get(num_strategies, 0.10)
+                
+                best_entity = max(matching_entities, key=lambda e: e.confidence)
+                best_entity.confidence = min(1.0, best_entity.confidence + confidence_boost)
+                
+                logger.debug(
+                    f"Cross-validated '{best_entity.name}' ({best_entity.entity_type}): "
+                    f"{num_strategies} strategies ({', '.join(strategies)}), "
+                    f"confidence boosted to {best_entity.confidence:.2f}"
+                )
+                
+                validated_entities.append(best_entity)
+        
+        return validated_entities
 
     def _resolve_overlaps(self, entities: List[NEREntity]) -> List[NEREntity]:
         """Resolve overlapping entities by keeping highest confidence"""
@@ -235,7 +291,14 @@ class MedicalNER:
         """Extract entities and return as list of dicts (compatible with KG builder)"""
         entities = self.extract(text)
         return [
-            {"name": e.name, "type": e.entity_type, "properties": {"confidence": e.confidence}}
+            {
+                "name": e.name, 
+                "type": e.entity_type, 
+                "properties": {
+                    "confidence": e.confidence,
+                    "strategy": e.strategy,
+                }
+            }
             for e in entities
         ]
 

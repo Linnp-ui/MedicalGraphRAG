@@ -1557,6 +1557,19 @@ class EntityDisambiguator:
         """规范化实体名称 - 将同义词/缩写映射到标准名称"""
         name = name.strip()
         
+        if self._terminology_service:
+            if entity_type == "Disease":
+                search_results = self._terminology_service.search(name, terminology="icd10", limit=1)
+                icd10_results = search_results.get("icd10", [])
+                if icd10_results:
+                    best_match = icd10_results[0]
+                    if best_match.get("score", 0) >= 0.8:
+                        return best_match.get("name", name)
+            elif entity_type == "Drug":
+                drug_results = self._terminology_service.lookup_drug(name)
+                if drug_results:
+                    return drug_results[0].get("standard_name", name)
+        
         if name in self.abbreviation_map:
             return self.abbreviation_map[name]
         

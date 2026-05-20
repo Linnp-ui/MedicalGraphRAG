@@ -1104,3 +1104,45 @@ async def clear_cache():
     cache = get_llm_cache()
     cache.clear()
     return {"status": "cleared"}
+
+
+@router.get("/terminology/icd10/{code}")
+async def lookup_icd10(code: str):
+    """查询 ICD-10 编码"""
+    from ..terminology.service import TerminologyService
+    service = TerminologyService()
+    result = service.lookup_icd10(code)
+    if not result:
+        raise HTTPException(status_code=404, detail=f"ICD-10 code not found: {code}")
+    return result
+
+
+@router.get("/terminology/drug/{name}")
+async def lookup_drug(name: str):
+    """查询药物信息"""
+    from ..terminology.service import TerminologyService
+    service = TerminologyService()
+    results = service.lookup_drug(name)
+    if not results:
+        raise HTTPException(status_code=404, detail=f"Drug not found: {name}")
+    return results
+
+
+@router.get("/terminology/search")
+async def search_terminology(
+    query: str = Query(..., min_length=1, max_length=200),
+    terminology: str = Query(default="all", description="术语类型: all, icd10, drugbank"),
+    limit: int = Query(default=10, ge=1, le=100)
+):
+    """搜索术语"""
+    from ..terminology.service import TerminologyService
+    service = TerminologyService()
+    return service.search(query, terminology, limit)
+
+
+@router.get("/terminology/stats")
+async def get_terminology_stats():
+    """获取术语库统计"""
+    from ..terminology.service import TerminologyService
+    service = TerminologyService()
+    return service.get_stats()

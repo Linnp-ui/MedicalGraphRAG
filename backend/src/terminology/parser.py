@@ -1,5 +1,6 @@
 import csv
 import json
+import xml.etree.ElementTree as ET
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,7 +35,7 @@ class UnsupportedFormatError(ParseError):
     pass
 
 
-class FileNotFoundError(ParseError):
+class ParserFileNotFoundError(ParseError):
     pass
 
 
@@ -53,7 +54,7 @@ class BaseParser(ABC):
     def _validate_file_exists(self) -> None:
         if not self.file_path.exists():
             logger.error(f"File not found: {self.file_path}")
-            raise FileNotFoundError(f"File not found: {self.file_path}")
+            raise ParserFileNotFoundError(f"File not found: {self.file_path}")
 
     def _get_format(self) -> str:
         return self.file_path.suffix.lower().lstrip(".")
@@ -117,8 +118,6 @@ class ICD10Parser(BaseParser):
     def _parse_xml(self) -> List[ICD10Code]:
         codes = []
         try:
-            import xml.etree.ElementTree as ET
-            
             tree = ET.parse(self.file_path)
             root = tree.getroot()
 
@@ -290,8 +289,6 @@ class DrugBankParser(BaseParser):
     def _parse_xml(self) -> List[Drug]:
         drugs = []
         try:
-            import xml.etree.ElementTree as ET
-
             tree = ET.parse(self.file_path)
             root = tree.getroot()
 

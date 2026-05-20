@@ -14,6 +14,15 @@ class EntityDisambiguator:
         self.abbreviation_map = self._load_abbreviation_map()
         self.icd10_mapping = self._load_icd10_mapping()
         self.umls_mapping = self._load_umls_mapping()
+        
+        self._terminology_service = None
+        try:
+            from ..terminology.service import TerminologyService
+            self._terminology_service = TerminologyService()
+            logger.info("TerminologyService loaded successfully")
+        except Exception as e:
+            logger.warning(f"Failed to load terminology service: {e}")
+            self._terminology_service = None
 
     def _load_synonym_rules(self) -> Dict[str, Dict[str, List[str]]]:
         """加载医疗实体同义词规则 - 基于ICD-10和UMLS标准"""

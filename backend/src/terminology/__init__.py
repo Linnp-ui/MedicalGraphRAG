@@ -1,5 +1,6 @@
 from .models import ICD10Code, Drug, DrugInteraction, ICD10Category
 from .parser import ICD10Parser, DrugBankParser, ParseStats, ParseError, UnsupportedFormatError
+from .mapper import TerminologyMapper, MappingResult
 
 __all__ = [
     "ICD10Code",
@@ -11,4 +12,6 @@ __all__ = [
     "ParseStats",
     "ParseError",
     "UnsupportedFormatError",
+    "TerminologyMapper",
+    "MappingResult",
 ]

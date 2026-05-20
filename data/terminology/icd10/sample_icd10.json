@@ -1,0 +1,36 @@
+{
+  "codes": [
+    {
+      "code": "I10",
+      "name": "高血压",
+      "name_en": "Essential (primary) hypertension",
+      "category": "循环系统疾病",
+      "chapter": "IX",
+      "block": "I10-I15",
+      "synonyms": ["原发性高血压", "高血压病"],
+      "description": "特发性高血压",
+      "related_codes": ["I11", "I12", "I13", "I15"]
+    },
+    {
+      "code": "E11",
+      "name": "2型糖尿病",
+      "name_en": "Type 2 diabetes mellitus",
+      "category": "内分泌、营养和代谢疾病",
+      "chapter": "IV",
+      "block": "E10-E14",
+      "synonyms": ["非胰岛素依赖型糖尿病", "成人发病型糖尿病"],
+      "description": "非胰岛素依赖型糖尿病",
+      "related_codes": ["E10", "E12", "E13", "E14"]
+    },
+    {
+      "code": "J18",
+      "name": "肺炎",
+      "name_en": "Pneumonia",
+      "category": "呼吸系统疾病",
+      "chapter": "X",
+      "block": "J12-J18",
+      "synonyms": ["肺部感染", "肺部炎症"],
+      "description": "肺炎，病原体未特指"
+    }
+  ]
+}

@@ -289,6 +289,50 @@ function MessageMetadata({ response }: { response: QueryResponse }) {
     }
   };
 
+  // 解析来源内容为结构化显示
+  const parseSourceContent = (content: string) => {
+    // 检查是否是实体摘要格式："实体【xxx】(类型): ..."
+    const entityMatch = content.match(/^实体【([^】]+)】\s*\(([^)]+)\):\s*(.*)$/);
+    if (entityMatch) {
+      return {
+        type: "entity",
+        name: entityMatch[1],
+        entityType: entityMatch[2],
+        content: entityMatch[3]
+      };
+    }
+    // 兼容旧格式："实体[xxx] (类型): ..."
+    const entityMatchOld = content.match(/^实体\[([^\]]+)\]\s*\(([^)]+)\):\s*(.*)$/);
+    if (entityMatchOld) {
+      return {
+        type: "entity",
+        name: entityMatchOld[1],
+        entityType: entityMatchOld[2],
+        content: entityMatchOld[3]
+      };
+    }
+    return { type: "text", content };
+  };
+
+  // 解析摘要内容
+  const parseSummary = (summary: string) => {
+    const parts = summary.split("|").map(p => p.trim());
+    const result: { [key: string]: string } = {};
+    
+    parts.forEach(part => {
+      const colonIndex = part.indexOf(":");
+      if (colonIndex > 0) {
+        const key = part.substring(0, colonIndex).trim();
+        const value = part.substring(colonIndex + 1).trim();
+        if (key && value) {
+          result[key] = value;
+        }
+      }
+    });
+    
+    return result;
+  };
+
   return (
     <div className="w-full mt-1">
       <div className="flex items-center gap-3 text-xs text-slate-500 mb-2 px-1">
@@ -313,17 +357,63 @@ function MessageMetadata({ response }: { response: QueryResponse }) {
 
       {expanded && response.sources && response.sources.length > 0 && (
         <div className="space-y-2 mt-2">
-          {response.sources.map((source, idx) => (
-            <div key={idx} className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600 shadow-sm">
-              <div className="flex justify-between items-center mb-1.5 pb-1.5 border-b border-slate-200/60">
-                <span className="font-medium text-slate-700">来源 {idx + 1}</span>
-                <span className="text-emerald-600 font-mono bg-emerald-50 px-1.5 py-0.5 rounded">
-                  分数: {typeof source.score === 'number' ? source.score.toFixed(3) : source.score}
-                </span>
+          {response.sources.map((source, idx) => {
+            const parsed = parseSourceContent(source.content);
+            return (
+              <div key={idx} className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600 shadow-sm">
+                <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-200/60">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-slate-700">来源 {idx + 1}</span>
+                    {parsed.type === "entity" && (
+                      <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[0.65rem] border border-indigo-100">
+                        {parsed.entityType}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-emerald-600 font-mono bg-emerald-50 px-1.5 py-0.5 rounded">
+                    分数: {typeof source.score === 'number' ? source.score.toFixed(3) : source.score}
+                  </span>
+                </div>
+                
+                {parsed.type === "entity" ? (
+                  <div className="space-y-1.5">
+                    <div className="font-medium text-slate-700 text-sm">{parsed.name}</div>
+                    {(() => {
+                      const summary = parseSummary(parsed.content);
+                      return (
+                        <div className="space-y-1">
+                          {summary["类型"] && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-slate-400">类型:</span>
+                              <span className="text-slate-600">{summary["类型"]}</span>
+                            </div>
+                          )}
+                          {summary["属性"] && (
+                            <div className="flex items-start gap-1.5">
+                              <span className="text-slate-400 shrink-0">属性:</span>
+                              <span className="text-slate-600">{summary["属性"]}</span>
+                            </div>
+                          )}
+                          {summary["关系"] && (
+                            <div className="flex items-start gap-1.5">
+                              <span className="text-slate-400 shrink-0">关系:</span>
+                              <span className="text-slate-600">{summary["关系"]}</span>
+                            </div>
+                          )}
+                          {/* 显示剩余内容 */}
+                          {!summary["类型"] && !summary["属性"] && !summary["关系"] && (
+                            <p className="text-slate-600">{parsed.content}</p>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <p className="line-clamp-3 hover:line-clamp-none transition-all">{source.content}</p>
+                )}
               </div>
-              <p className="line-clamp-3 hover:line-clamp-none transition-all">{source.content}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

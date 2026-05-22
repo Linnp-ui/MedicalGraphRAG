@@ -45,7 +45,7 @@ def retrieve_drift(state: GraphState) -> GraphState:
             
             if summary:
                 documents.append({
-                    "content": f"实体[{entity_name}] ({entity_type}): {summary}",
+                    "content": f"实体【{entity_name}】({entity_type}): {summary}",
                     "entity": entity_name,
                     "score": item.get("score", 1.0)
                 })

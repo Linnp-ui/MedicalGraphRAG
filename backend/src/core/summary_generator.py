@@ -55,13 +55,39 @@ class SummaryGenerator:
         summary_parts = [f"实体: {entity_name}"]
         if entity.get("type"):
             summary_parts.append(f"类型: {entity['type']}")
-        if entity.get("properties"):
-            summary_parts.append(f"属性: {str(entity['properties'])}")
-        if relationships:
-            rel_str = ", ".join([f"{r['target']} ({r['relation']})" for r in relationships[:5]])
-            summary_parts.append(f"相关实体: {rel_str}")
         
-        return "; ".join(summary_parts)
+        # 格式化属性，过滤空属性
+        if entity.get("properties"):
+            props = entity["properties"]
+            if isinstance(props, dict):
+                prop_strs = []
+                for k, v in props.items():
+                    if v is not None and v != "" and v != {} and v != []:
+                        prop_strs.append(f"{k}: {v}")
+                if prop_strs:
+                    summary_parts.append(f"属性: {', '.join(prop_strs)}")
+        
+        # 格式化关系，按关系类型分组
+        if relationships:
+            # 按关系类型分组
+            rel_groups = {}
+            for r in relationships:
+                rel_type = r.get("relation", "RELATED")
+                if rel_type not in rel_groups:
+                    rel_groups[rel_type] = []
+                rel_groups[rel_type].append(r.get("target", ""))
+            
+            rel_strs = []
+            for rel_type, targets in rel_groups.items():
+                targets_str = "、".join(targets[:3])
+                if len(targets) > 3:
+                    targets_str += f"等{len(targets)}个"
+                rel_strs.append(f"{rel_type}: {targets_str}")
+            
+            if rel_strs:
+                summary_parts.append(f"关系: {'; '.join(rel_strs)}")
+        
+        return " | ".join(summary_parts)
 
     def generate_community_summary(self, community_id: int, level: int = 0) -> str:
         """为社区生成摘要"""

@@ -53,39 +53,53 @@ class SummaryGenerator:
         relationships = entity.get("relationships", [])
         
         summary_parts = [f"实体: {entity_name}"]
-        if entity.get("type"):
-            summary_parts.append(f"类型: {entity['type']}")
+        entity_type = entity.get("type")
+        if entity_type:
+            summary_parts.append(f"类型: {entity_type}")
         
         # 格式化属性，过滤空属性
-        if entity.get("properties"):
-            props = entity["properties"]
+        props = entity.get("properties")
+        if props:
             if isinstance(props, dict):
                 prop_strs = []
                 for k, v in props.items():
                     if v is not None and v != "" and v != {} and v != []:
+                        # 确保值是字符串
                         prop_strs.append(f"{k}: {v}")
                 if prop_strs:
                     summary_parts.append(f"属性: {', '.join(prop_strs)}")
         
-        # 格式化关系，按关系类型分组
-        if relationships:
+        # 格式化关系，按关系类型分组 - 确保None安全
+        if relationships and isinstance(relationships, list):
             # 按关系类型分组
             rel_groups = {}
             for r in relationships:
-                rel_type = r.get("relation", "RELATED")
-                if rel_type not in rel_groups:
-                    rel_groups[rel_type] = []
-                rel_groups[rel_type].append(r.get("target", ""))
+                if not r or not isinstance(r, dict):
+                    continue
+                rel_type = r.get("relation", "RELATED") or "RELATED"
+                target = r.get("target", "") or ""
+                # 确保是字符串
+                rel_type = str(rel_type)
+                target = str(target)
+                if target:
+                    if rel_type not in rel_groups:
+                        rel_groups[rel_type] = []
+                    rel_groups[rel_type].append(target)
             
-            rel_strs = []
-            for rel_type, targets in rel_groups.items():
-                targets_str = "、".join(targets[:3])
-                if len(targets) > 3:
-                    targets_str += f"等{len(targets)}个"
-                rel_strs.append(f"{rel_type}: {targets_str}")
-            
-            if rel_strs:
-                summary_parts.append(f"关系: {'; '.join(rel_strs)}")
+            if rel_groups:
+                rel_strs = []
+                for rel_type, targets in rel_groups.items():
+                    # 过滤掉空的目标
+                    valid_targets = [t for t in targets if t]
+                    if not valid_targets:
+                        continue
+                    targets_str = "、".join(valid_targets[:3])
+                    if len(valid_targets) > 3:
+                        targets_str += f"等{len(valid_targets)}个"
+                    rel_strs.append(f"{rel_type}: {targets_str}")
+                
+                if rel_strs:
+                    summary_parts.append(f"关系: {'; '.join(rel_strs)}")
         
         return " | ".join(summary_parts)
 

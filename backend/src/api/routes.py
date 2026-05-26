@@ -29,6 +29,10 @@ from .schemas import (
     BatchUpdateRequest,
     UpdateResultResponse,
     DocumentVersionResponse,
+    ErrorLogReportRequest,
+    ErrorLogResponse,
+    ErrorLogListResponse,
+    ErrorStatsResponse,
 )
 from ..core.neo4j_client import get_neo4j_client
 from ..core.config import get_settings
@@ -1101,3 +1105,111 @@ async def get_terminology_stats():
     from ..terminology.service import TerminologyService
     service = TerminologyService()
     return service.get_stats()
+
+
+# ─── 错误日志回流 API ────────────────────────────────────────────────────────────
+
+
+@router.post("/errors/report")
+async def report_error(request: ErrorLogReportRequest):
+    """接收前端错误日志上报
+    
+    前端应用通过此接口上报运行时错误，用于集中监控和分析
+    """
+    from ..core.error_collector import get_error_collector
+    
+    collector = get_error_collector()
+    error_id = collector.record_error(
+        error_type=request.error_type,
+        message=request.message,
+        stack_trace=request.stack_trace,
+        source="frontend",
+        severity=request.severity,
+        url=request.url,
+        user_agent=request.user_agent,
+        session_id=request.session_id,
+        user_id=request.user_id,
+        extra=request.extra,
+    )
+    
+    return {"status": "recorded", "error_id": error_id}
+
+
+@router.get("/errors", response_model=ErrorLogListResponse)
+async def get_errors(
+    source: Optional[str] = Query(None, description="Filter by source: backend, frontend"),
+    error_type: Optional[str] = Query(None, description="Filter by error type"),
+    severity: Optional[str] = Query(None, description="Filter by severity"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    """获取错误日志列表
+    
+    支持按来源、类型、严重程度过滤
+    """
+    from ..core.error_collector import get_error_collector
+    
+    collector = get_error_collector()
+    errors = collector.get_errors(
+        source=source,
+        error_type=error_type,
+        severity=severity,
+        limit=limit,
+        offset=offset,
+    )
+    
+    return ErrorLogListResponse(
+        errors=[ErrorLogResponse(**e) for e in errors],
+        total=len(errors),
+    )
+
+
+@router.get("/errors/stats", response_model=ErrorStatsResponse)
+async def get_error_stats():
+    """获取错误统计信息"""
+    from ..core.error_collector import get_error_collector
+    
+    collector = get_error_collector()
+    stats = collector.get_stats()
+    
+    return ErrorStatsResponse(**stats)
+
+
+@router.get("/errors/top")
+async def get_top_errors(limit: int = Query(default=10, ge=1, le=50)):
+    """获取高频错误（按出现次数排序）"""
+    from ..core.error_collector import get_error_collector
+    
+    collector = get_error_collector()
+    top_errors = collector.get_top_errors(limit=limit)
+    
+    return {"errors": top_errors}
+
+
+@router.get("/errors/{error_id}", response_model=ErrorLogResponse)
+async def get_error_detail(error_id: str):
+    """获取错误详情"""
+    from ..core.error_collector import get_error_collector
+    
+    collector = get_error_collector()
+    error = collector.get_error_by_id(error_id)
+    
+    if not error:
+        raise HTTPException(status_code=404, detail=f"Error not found: {error_id}")
+    
+    return ErrorLogResponse(**error)
+
+
+@router.delete("/errors")
+async def clear_errors(before: Optional[float] = Query(None, description="Clear errors before this timestamp")):
+    """清空错误日志
+    
+    Args:
+        before: Unix timestamp, 只清除此时间之前的错误。不传则清空全部
+    """
+    from ..core.error_collector import get_error_collector
+    
+    collector = get_error_collector()
+    count = collector.clear_errors(before=before)
+    
+    return {"status": "cleared", "count": count}

@@ -16,7 +16,29 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
             return response
         except Exception as e:
             request_id = get_request_id() or "unknown"
-            logger.exception(f"[{request_id}] Unhandled exception: {type(e).__name__}: {str(e)}")
+            error_type = type(e).__name__
+            error_message = str(e)
+            
+            logger.exception(f"[{request_id}] Unhandled exception: {error_type}: {error_message}")
+            
+            try:
+                from ..core.error_collector import get_error_collector
+                collector = get_error_collector()
+                collector.record_error(
+                    error_type=error_type,
+                    message=error_message,
+                    source="backend",
+                    severity="error",
+                    request_id=request_id,
+                    extra={
+                        "path": str(request.url.path),
+                        "method": request.method,
+                        "query": str(request.url.query) if request.url.query else None,
+                    }
+                )
+            except Exception:
+                pass
+            
             return JSONResponse(
                 status_code=500,
                 content={

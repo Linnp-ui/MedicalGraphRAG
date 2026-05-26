@@ -236,3 +236,47 @@ class DocumentVersionResponse(BaseModel):
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     status: Optional[str] = None
+
+
+class ErrorLogReportRequest(BaseModel):
+    error_type: str = Field(..., description="Error type (e.g., TypeError, NetworkError)")
+    message: str = Field(..., description="Error message")
+    stack_trace: Optional[str] = Field(None, description="Stack trace")
+    severity: str = Field(default="error", description="Severity: debug, info, warning, error, critical")
+    url: Optional[str] = Field(None, description="URL where error occurred")
+    user_agent: Optional[str] = Field(None, description="User agent string")
+    session_id: Optional[str] = Field(None, description="Session ID")
+    user_id: Optional[str] = Field(None, description="User ID")
+    extra: Optional[Dict[str, Any]] = Field(None, description="Additional context")
+
+
+class ErrorLogResponse(BaseModel):
+    error_id: str
+    error_type: str
+    message: str
+    stack_trace: Optional[str] = None
+    source: str
+    severity: str
+    request_id: Optional[str] = None
+    user_id: Optional[str] = None
+    session_id: Optional[str] = None
+    url: Optional[str] = None
+    user_agent: Optional[str] = None
+    extra: Dict[str, Any] = Field(default_factory=dict)
+    timestamp: float
+    count: int
+    first_seen: float
+    last_seen: float
+
+
+class ErrorLogListResponse(BaseModel):
+    errors: List[ErrorLogResponse]
+    total: int
+
+
+class ErrorStatsResponse(BaseModel):
+    total_errors: int
+    unique_errors: int
+    errors_by_type: Dict[str, int]
+    errors_by_source: Dict[str, int]
+    errors_by_severity: Dict[str, int]

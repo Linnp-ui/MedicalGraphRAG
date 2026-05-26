@@ -165,6 +165,25 @@ async def get_schema():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _build_question_response(result: dict) -> QuestionResponse:
+    sources = []
+    for doc in result.get("documents", [])[:3]:
+        sources.append(
+            {
+                "content": doc.get("content", "")[:200] + "...",
+                "score": doc.get("similarity", doc.get("score", 0)),
+            }
+        )
+
+    return QuestionResponse(
+        question=result["question"],
+        answer=result.get("answer", "No answer generated"),
+        routing=result.get("routing", "drift"),
+        documents_count=len(result.get("documents", [])),
+        sources=sources,
+    )
+
+
 @router.post("/search", response_model=QuestionResponse)
 async def search(request: QuestionRequest):
     request_id = get_request_id() or "unknown"
@@ -172,23 +191,7 @@ async def search(request: QuestionRequest):
 
     try:
         result = run_workflow(request.question, history=request.history)
-
-        sources = []
-        for doc in result.get("documents", [])[:3]:
-            sources.append(
-                {
-                    "content": doc.get("content", "")[:200] + "...",
-                    "score": doc.get("similarity", doc.get("score", 0)),
-                }
-            )
-
-        return QuestionResponse(
-            question=result["question"],
-            answer=result.get("answer", "No answer generated"),
-            routing=result.get("routing", "drift"),
-            documents_count=len(result.get("documents", [])),
-            sources=sources,
-        )
+        return _build_question_response(result)
     except Exception as e:
         logger.error(f"[{request_id}] Search failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -201,23 +204,7 @@ async def query(request: QuestionRequest):
 
     try:
         result = run_workflow(request.question, history=request.history)
-
-        sources = []
-        for doc in result.get("documents", [])[:3]:
-            sources.append(
-                {
-                    "content": doc.get("content", "")[:200] + "...",
-                    "score": doc.get("similarity", doc.get("score", 0)),
-                }
-            )
-
-        return QuestionResponse(
-            question=result["question"],
-            answer=result.get("answer", "No answer generated"),
-            routing=result.get("routing", "drift"),
-            documents_count=len(result.get("documents", [])),
-            sources=sources,
-        )
+        return _build_question_response(result)
     except Exception as e:
         logger.error(f"[{request_id}] Query failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -233,23 +220,7 @@ async def search_async(request: QuestionRequest):
         from ..workflow.graph import run_workflow_async
 
         result = await run_workflow_async(request.question, history=request.history)
-
-        sources = []
-        for doc in result.get("documents", [])[:3]:
-            sources.append(
-                {
-                    "content": doc.get("content", "")[:200] + "...",
-                    "score": doc.get("similarity", doc.get("score", 0)),
-                }
-            )
-
-        return QuestionResponse(
-            question=result["question"],
-            answer=result.get("answer", "No answer generated"),
-            routing=result.get("routing", "drift"),
-            documents_count=len(result.get("documents", [])),
-            sources=sources,
-        )
+        return _build_question_response(result)
     except Exception as e:
         logger.error(f"[{request_id}] Async search failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -265,23 +236,7 @@ async def query_async(request: QuestionRequest):
         from ..workflow.graph import run_workflow_async
 
         result = await run_workflow_async(request.question, history=request.history)
-
-        sources = []
-        for doc in result.get("documents", [])[:3]:
-            sources.append(
-                {
-                    "content": doc.get("content", "")[:200] + "...",
-                    "score": doc.get("similarity", doc.get("score", 0)),
-                }
-            )
-
-        return QuestionResponse(
-            question=result["question"],
-            answer=result.get("answer", "No answer generated"),
-            routing=result.get("routing", "drift"),
-            documents_count=len(result.get("documents", [])),
-            sources=sources,
-        )
+        return _build_question_response(result)
     except Exception as e:
         logger.error(f"[{request_id}] Async query failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -440,8 +395,8 @@ async def get_graph_data(
     cache_key = f"{node_label or 'all'}:{limit}:{offset}"
     cache = get_graph_data_cache()
     
-    cached_result = cache.cache.get(cache_key)
-    if cached_result:
+    cached_result = cache.raw_get(cache_key)
+    if cached_result is not None:
         logger.debug(f"Cache hit for graph data: {cache_key}")
         return GraphDataResponse(**cached_result)
     
@@ -452,7 +407,7 @@ async def get_graph_data(
             limit=limit,
             offset=offset,
         )
-        cache.cache.set(cache_key, data, ttl=300)
+        cache.raw_set(cache_key, data, ttl=300)
         return GraphDataResponse(**data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -485,8 +440,8 @@ async def search_nodes(
     cache_key = f"{query}:{node_label or 'all'}:{limit}:{fuzzy}:{fuzzy_mode}"
     cache = get_search_cache()
     
-    cached_result = cache.cache.get(cache_key)
-    if cached_result:
+    cached_result = cache.raw_get(cache_key)
+    if cached_result is not None:
         logger.debug(f"Cache hit for search: {cache_key}")
         return GraphSearchResponse(**cached_result)
     
@@ -511,7 +466,7 @@ async def search_nodes(
             "results": results,
             "total": len(results),
         }
-        cache.cache.set(cache_key, response_data, ttl=600)
+        cache.raw_set(cache_key, response_data, ttl=600)
         return GraphSearchResponse(**response_data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

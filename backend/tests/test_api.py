@@ -413,7 +413,7 @@ class TestMetricsAPI:
         mock_metrics.get_metrics.return_value = {
             "requests_total": {"total": 100},
             "errors_total": {"total": 5},
-            "requests_duration": {"avg": [50.0]},
+            "requests_duration": {"http_request_duration_ms": {"count": 1, "sum": 50.0, "avg": 50.0}},
             "neo4j_pool": {"active": 10}
         }
         mock_get_metrics.return_value = mock_metrics

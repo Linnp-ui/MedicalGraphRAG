@@ -169,13 +169,6 @@ def _format_document_context(documents: list) -> str:
     return "\n\n".join(parts)
 
 
-def decompose_query(state: GraphState) -> GraphState:
-    logger.info("=== Query Decomposition ===")
-    question = state["question"]
-    state["subqueries"] = [question]
-    return state
-
-
 def handle_error(state: GraphState) -> GraphState:
     logger.error(f"Error: {state.get('error', 'Unknown error')}")
     state["answer"] = "An error occurred while processing your request."

@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     llm_cache_ttl: int = 604800
     llm_cache_max_size: int = 1000
 
+    cors_origins: list[str] = Field(default=["*"], alias="CORS_ORIGINS")
+    cors_allow_credentials: bool = Field(default=False, alias="CORS_ALLOW_CREDENTIALS")
+
     chunk_size: int = Field(default=512)
     chunk_overlap: int = Field(default=75)
     split_strategy: str = Field(default="auto")
@@ -91,12 +94,14 @@ def _replace_env_vars(config: Any, settings: Settings) -> Any:
     return config
 
 
+@lru_cache
 def load_cypher_queries() -> dict[str, Any]:
     queries_path = Path(__file__).parent.parent.parent / "config" / "cypher" / "queries.yaml"
     with open(queries_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
+@lru_cache
 def load_prompts() -> dict[str, Any]:
     prompts_path = Path(__file__).parent.parent.parent / "config" / "prompts.yaml"
     with open(prompts_path, "r", encoding="utf-8") as f:

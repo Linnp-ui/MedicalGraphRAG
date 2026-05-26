@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from loguru import logger
 
 from ..core.config import get_settings
+from ..ingestion.medical_ner import MedicalNER
 
 
 class MedicalIntent(str, Enum):
@@ -29,12 +30,67 @@ class IntentResult(BaseModel):
     slots: Dict[str, str] = Field(default_factory=dict, description="意图槽位信息")
 
 
+# Shared medical keyword lists (used by both entity extraction and rule-based classification)
+# Entity extraction uses full lists; classification uses _CLASSIFY subsets to avoid overlap.
+_DISEASE_CLASSIFY_LIST = [
+    "高血压", "糖尿病", "心肌梗死", "肺炎", "感冒", "癌症", "肿瘤", "颈椎病",
+    "肺癌", "乙肝", "胃炎", "脑梗死", "脑出血", "抑郁症", "贫血", "痛风", "肾结石",
+    "帕金森", "阿尔茨海默症", "骨质疏松", "咽炎", "失眠", "荨麻疹", "口腔溃疡", "流感",
+    "类风湿性关节炎", "支气管哮喘", "脂肪肝", "骨折",
+]
+_DISEASE_LIST = [
+    "肺癌", "乙肝", "胃炎", "脑梗死", "脑出血", "抑郁症", "贫血", "痛风", "肾结石",
+    "帕金森", "阿尔茨海默症", "骨质疏松", "咽炎", "失眠", "荨麻疹", "口腔溃疡", "流感",
+    "类风湿性关节炎", "支气管哮喘", "脂肪肝", "骨折", "甲状腺", "心血管疾病", "哮喘",
+    "冠心病", "心律失常", "高血压危象", "慢性阻塞性肺疾病", "支气管扩张", "肺脓肿",
+    "间质性肺病", "呼吸衰竭", "睡眠呼吸暂停", "鼻窦炎", "扁桃体炎", "喉炎", "中耳炎",
+    "青光眼", "白内障", "视网膜病变", "黄斑病变", "牙周病", "龋齿", "牙髓炎", "脂溢性皮炎",
+    "湿疹", "银屑病", "甲亢", "甲减", "骨关节炎", "偏头痛", "带状疱疹", "手足口病",
+    "水痘", "麻疹", "风疹", "流行性腮腺炎", "猩红热", "百日咳", "白喉", "破伤风", "狂犬病",
+    "心肌梗死", "心梗",
+]
+_DRUG_LIST = [
+    "阿司匹林", "布洛芬", "二甲双胍", "胰岛素", "硝苯地平", "氨氯地平", "格列齐特",
+    "奥美拉唑", "硫糖铝", "秋水仙碱", "沙丁胺醇", "青霉素", "阿莫西林", "头孢菌素",
+    "左氧氟沙星", "罗红霉素", "阿奇霉素", "甲硝唑", "替硝唑", "利福平", "异烟肼",
+    "泼尼松", "地塞米松", "氢化可的松", "倍他米松", "双氯芬酸", "塞来昔布",
+    "氯吡格雷", "替格瑞洛", "华法林", "低分子肝素", "尿激酶", "链激酶",
+    "阿托伐他汀", "瑞舒伐他汀", "辛伐他汀", "洛伐他汀", "非诺贝特", "依折麦布",
+    "普萘洛尔", "美托洛尔", "阿替洛尔", "比索洛尔", "卡维地洛",
+    "左旋氨氯地平", "地尔硫卓", "维拉帕米", "卡托普利", "依那普利",
+    "贝那普利", "赖诺普利", "缬沙坦", "氯沙坦", "厄贝沙坦", "替米沙坦", "奥美沙坦",
+    "氢氯噻嗪", "呋塞米", "螺内酯", "氨苯蝶啶", "甘露醇", "甘油果糖", "硝酸甘油",
+    "单硝酸异山梨酯", "胺碘酮", "普罗帕酮", "美西律",
+    "地高辛", "西地兰", "多巴胺", "多巴酚丁胺", "肾上腺素", "去甲肾上腺素",
+    "异丙肾上腺素", "特布他林", "布地奈德", "氟替卡松", "倍氯米松",
+]
+_SYMPTOM_LIST = [
+    "头痛", "头晕", "发烧", "咳嗽", "恶心", "呕吐", "胸痛", "乏力", "呼吸困难", "胸闷",
+    "腹泻", "失眠", "口腔溃疡", "关节痛", "肌肉痛", "背痛", "颈痛", "肩痛", "腿痛",
+    "手臂痛", "麻木", "刺痛", "肿胀", "发红", "瘙痒", "皮疹", "出血", "瘀斑", "黄疸",
+    "口干", "口苦", "口臭", "牙龈出血", "鼻出血", "耳痛", "耳鸣", "听力下降", "视力模糊",
+    "视力下降", "眼痛", "流泪", "鼻塞", "流涕", "打喷嚏", "咽痛", "声音嘶哑", "吞咽困难",
+    "食欲不振", "恶心", "呕吐", "呕血", "黑便", "腹泻", "便秘", "腹痛", "腹胀", "烧心",
+    "胸痛", "胸闷", "心悸", "呼吸困难", "咳嗽", "咳痰", "咯血", "气喘", "端坐呼吸", "疼痛",
+    "哮喘",
+]
+_EXAMINATION_LIST = [
+    "血常规", "尿常规", "大便常规", "肝功能", "肾功能", "血糖", "血脂", "电解质",
+    "凝血功能", "甲状腺功能", "肿瘤标志物", "心电图", "超声", "CT", "MRI", "X光",
+    "胃镜", "肠镜", "支气管镜", "病理检查", "核酸检测", "抗体检测", "肺功能检查",
+    "动态心电图", "心脏彩超", "腹部超声", "妇科超声", "乳腺超声", "甲状腺超声",
+    "头颅CT", "头颅MRI", "胸部X光", "钡餐造影", "血管造影", "腰椎穿刺", "胸腔穿刺",
+    "腹腔穿刺", "骨髓穿刺", "基因检测", "血沉", "C反应蛋白", "类风湿因子", "血气分析",
+]
+
+
 class MedicalIntentClassifier:
     """医疗问答意图识别器"""
 
     def __init__(self):
         self.settings = get_settings()
         self._llm = None
+        self._ner = MedicalNER()  # 集成MedicalNER
         
         self._intent_keywords = {
             MedicalIntent.SYMPTOM_QUERY: ["症状", "原因", "为什么", "怎么回事", "怎么了", "出现", "表现", "持续", "怎么处理", "发作"],
@@ -72,57 +128,42 @@ class MedicalIntentClassifier:
         return self._llm
 
     def _extract_entities_from_question(self, question: str) -> List[str]:
-        """从问题中提取医疗实体"""
+        """从问题中提取医疗实体 - 结合MedicalNER和规则匹配"""
         entities = []
         
-        disease_list = [
-            "高血压", "糖尿病", "心肌梗死", "肺炎", "感冒", "头痛", "头晕", "癌症", "肿瘤", "颈椎病",
-            "肺癌", "乙肝", "胃炎", "脑梗死", "脑出血", "抑郁症", "贫血", "痛风", "肾结石",
-            "帕金森", "阿尔茨海默症", "骨质疏松", "咽炎", "失眠", "荨麻疹", "口腔溃疡", "流感",
-            "类风湿性关节炎", "支气管哮喘", "脂肪肝", "心肌梗死", "骨折", "甲状腺", "心血管疾病",
-            "哮喘"
-        ]
-        drug_list = [
-            "阿司匹林", "布洛芬", "二甲双胍", "胰岛素", "硝苯地平", "氨氯地平", "格列齐特",
-            "奥美拉唑", "硫糖铝", "秋水仙碱", "沙丁胺醇"
-        ]
-        symptom_list = [
-            "头痛", "头晕", "发烧", "咳嗽", "恶心", "呕吐", "胸痛", "乏力", "呼吸困难", "胸闷",
-            "腹泻", "失眠", "恶心", "呕吐", "口腔溃疡", "关节痛"
-        ]
+        # 使用MedicalNER提取实体
+        ner_entities = self._ner.extract(question)
+        for entity in ner_entities:
+            entities.append(entity.name)
         
-        for disease in disease_list:
-            if disease in question:
+        # 规则匹配（使用共享的模块级列表）
+        for disease in _DISEASE_LIST:
+            if disease in question and disease not in entities:
                 entities.append(disease)
         
-        for drug in drug_list:
-            if drug in question:
+        for drug in _DRUG_LIST:
+            if drug in question and drug not in entities:
                 entities.append(drug)
         
-        for symptom in symptom_list:
+        for symptom in _SYMPTOM_LIST:
             if symptom in question and symptom not in entities:
                 entities.append(symptom)
         
-        return entities
+        for exam in _EXAMINATION_LIST:
+            if exam in question and exam not in entities:
+                entities.append(exam)
+        
+        # 去重
+        unique_entities = list(set(entities))
+        return unique_entities
 
     def _rule_based_classify(self, question: str) -> Optional[IntentResult]:
         """基于规则的快速意图分类"""
         entities = self._extract_entities_from_question(question)
         
-        drug_list = [
-            "阿司匹林", "布洛芬", "二甲双胍", "胰岛素", "硝苯地平", "氨氯地平", "格列齐特",
-            "奥美拉唑", "硫糖铝", "秋水仙碱", "沙丁胺醇"
-        ]
-        disease_keywords = [
-            "高血压", "糖尿病", "心肌梗死", "肺炎", "感冒", "癌症", "肿瘤", "颈椎病",
-            "肺癌", "乙肝", "胃炎", "脑梗死", "脑出血", "抑郁症", "贫血", "痛风", "肾结石",
-            "帕金森", "阿尔茨海默症", "骨质疏松", "咽炎", "失眠", "荨麻疹", "口腔溃疡", "流感",
-            "类风湿性关节炎", "支气管哮喘", "脂肪肝", "心肌梗死", "骨折"
-        ]
-        symptom_keywords = [
-            "头痛", "头晕", "发烧", "咳嗽", "感冒", "疼痛", "恶心", "呕吐", "腹泻", "失眠",
-            "口腔溃疡", "关节痛", "哮喘"
-        ]
+        drug_list = _DRUG_LIST
+        disease_keywords = _DISEASE_CLASSIFY_LIST
+        symptom_keywords = _SYMPTOM_LIST
         
         # 药物名称出现在问题中 → 药物查询（优先级最高）
         for drug in drug_list:

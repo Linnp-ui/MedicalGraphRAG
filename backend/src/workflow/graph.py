@@ -18,7 +18,7 @@ def should_degrade(state: GraphState) -> bool:
     llm_qa_breaker = get_circuit_breaker("llm_qa")
     llm_cypher_breaker = get_circuit_breaker("llm_cypher")
 
-    return llm_qa_breaker.state.name == "OPEN" or llm_cypher_breaker.state.name == "OPEN"
+    return llm_qa_breaker.is_open() or llm_cypher_breaker.is_open()
 
 
 def create_workflow() -> StateGraph:

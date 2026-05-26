@@ -154,7 +154,6 @@ class DocumentProcessingPipeline:
 
             stats.total_processing_time += result.processing_time
 
-        stats.total_processing_time = sum(r.processing_time for r in results)
         return results, stats
 
     async def process_batch_async(

@@ -71,7 +71,7 @@ class CypherGenerator:
         circuit_breaker = get_circuit_breaker("llm_cypher")
         
         try:
-            if circuit_breaker.state.name == "OPEN":
+            if circuit_breaker.is_open():
                 logger.warning("Circuit breaker OPEN for cypher generation, returning empty")
                 return ""
             

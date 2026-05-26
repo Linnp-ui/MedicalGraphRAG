@@ -36,12 +36,21 @@ class CircuitBreaker:
     @property
     def state(self) -> CircuitState:
         with self._lock:
-            if self._state == CircuitState.OPEN:
-                if self._should_attempt_reset():
-                    self._state = CircuitState.HALF_OPEN
-                    self._half_open_calls = 0
-                    logger.info(f"Circuit {self.name} transitioning to HALF_OPEN")
             return self._state
+
+    def _try_half_open(self) -> bool:
+        """Check if circuit should transition from OPEN to HALF_OPEN.
+        Returns True if transition occurred."""
+        with self._lock:
+            if (
+                self._state == CircuitState.OPEN
+                and self._should_attempt_reset()
+            ):
+                self._state = CircuitState.HALF_OPEN
+                self._half_open_calls = 0
+                logger.info(f"Circuit {self.name} transitioning to HALF_OPEN")
+                return True
+            return False
 
     def _should_attempt_reset(self) -> bool:
         if self._last_failure_time is None:
@@ -74,8 +83,19 @@ class CircuitBreaker:
                 self._state = CircuitState.OPEN
                 logger.warning(f"Circuit {self.name} OPEN after {self._failure_count} failures")
 
+    def is_open(self) -> bool:
+        """Check if circuit is open, attempting half-open transition."""
+        self._try_half_open()
+        with self._lock:
+            return self._state == CircuitState.OPEN
+
     def call(self, func: Callable[[], Any], fallback: Any = None) -> Any:
-        if self.state == CircuitState.OPEN:
+        self._try_half_open()
+
+        with self._lock:
+            state = self._state
+
+        if state == CircuitState.OPEN:
             logger.warning(f"Circuit {self.name} is OPEN, using fallback")
             if fallback is not None:
                 return fallback

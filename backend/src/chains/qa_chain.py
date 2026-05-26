@@ -123,19 +123,19 @@ class AsyncQAChain:
         metrics = get_metrics()
 
         try:
-            if circuit_breaker.state.name == "OPEN":
+            if circuit_breaker.is_open():
                 logger.warning("Circuit breaker OPEN, returning fallback response")
                 metrics.increment("llm_fallback_total", {"reason": "circuit_open"})
                 return self._get_fallback_response(question, context)
 
-            start_time = __import__("time").perf_counter()
+            start_time = time.perf_counter()
             answer = await chain.ainvoke(
                 {
                     "question": question,
                     "context": context,
                 }
             )
-            duration_ms = (__import__("time").perf_counter() - start_time) * 1000
+            duration_ms = (time.perf_counter() - start_time) * 1000
             metrics.observe("llm_call_duration_ms", duration_ms)
             metrics.increment("llm_calls_total", {"status": "success"})
 
@@ -171,16 +171,7 @@ class QAChain:
         history: Optional[List[Dict[str, str]]] = None,
     ) -> str:
         """Answer question with context and optional conversation history"""
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                return self._run_sync(question, context, history)
-            else:
-                return loop.run_until_complete(
-                    self.async_chain.aanswer(question, context, history)
-                )
-        except RuntimeError:
-            return self._run_sync(question, context, history)
+        return self._run_sync(question, context, history)
 
     def _run_sync(
         self,
@@ -210,7 +201,7 @@ class QAChain:
         circuit_breaker = get_circuit_breaker("llm_qa")
 
         try:
-            if circuit_breaker.state.name == "OPEN":
+            if circuit_breaker.is_open():
                 logger.warning("Circuit breaker OPEN, returning fallback response")
                 return self.async_chain._get_fallback_response(question, context)
 

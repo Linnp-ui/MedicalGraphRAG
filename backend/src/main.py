@@ -37,7 +37,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, requests_per_minute: int = 120):
+    def __init__(self, app, requests_per_minute: int = 120, cleanup_interval: int = 300):
         super().__init__(app)
         self.requests_per_minute = requests_per_minute
         self._requests: dict = defaultdict(list)
@@ -46,8 +46,22 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             "/api/v1/graph/search": 60,
             "/api/v1/graph/data": 60,
         }
+        self._last_cleanup = time.time()
+        self._cleanup_interval = cleanup_interval
+
+    def _cleanup_stale_keys(self):
+        now = time.time()
+        if now - self._last_cleanup < self._cleanup_interval:
+            return
+        self._last_cleanup = now
+        cutoff = now - 60
+        stale = [k for k, v in self._requests.items() if not v or max(v) < cutoff]
+        for k in stale:
+            del self._requests[k]
 
     async def dispatch(self, request: Request, call_next):
+        self._cleanup_stale_keys()
+
         client_ip = request.client.host if request.client else "unknown"
         endpoint = request.url.path
         
@@ -121,10 +135,13 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Read allowed origins from env, fall back to permissive for dev
+    cors_origins = settings.cors_origins if hasattr(settings, 'cors_origins') and settings.cors_origins else ["*"]
+    allow_creds = settings.cors_allow_credentials if hasattr(settings, 'cors_allow_credentials') else False
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
+        allow_origins=cors_origins,
+        allow_credentials=allow_creds,
         allow_methods=["*"],
         allow_headers=["*"],
     )

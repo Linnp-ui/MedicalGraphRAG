@@ -149,8 +149,8 @@ def llm_cached(model: str = "default", **default_params):
             
             cache = get_llm_cache()
             
-            prompt_parts = [func.__name__, str(args), str(kwargs)]
-            prompt = ":".join(prompt_parts)
+            key_data = {"func": func.__name__, "args": args, "kwargs": kwargs}
+            prompt = json.dumps(key_data, sort_keys=True, default=str)
             
             params = {**default_params, **kwargs}
             

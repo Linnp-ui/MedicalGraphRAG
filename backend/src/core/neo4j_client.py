@@ -100,8 +100,8 @@ class Neo4jClient:
         duration_ms = (time.perf_counter() - start) * 1000
         try:
             get_metrics_middleware().record_neo4j_query(duration_ms, query_type="execute")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to record Neo4j metrics: {e}")
         return results
 
     async def execute_query_async(

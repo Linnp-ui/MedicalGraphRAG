@@ -225,6 +225,14 @@ class QueryCache:
         self.cache.set(key, value, ttl=self.ttl)
         logger.debug(f"Cached result for query key: {key}")
 
+    def raw_get(self, key: str) -> Optional[Any]:
+        """Get cached result by pre-computed key"""
+        return self.cache.get(key)
+
+    def raw_set(self, key: str, value: Any, ttl: Optional[int] = None):
+        """Cache a result by pre-computed key"""
+        self.cache.set(key, value, ttl=ttl or self.ttl)
+
     def clear(self):
         """Clear all cached results"""
         self.cache.clear()
@@ -249,7 +257,8 @@ def cached(cache_instance_factory: Callable[[], QueryCache]):
                 "args": args[1:] if args and hasattr(args[0], 'search') else args,
                 "kwargs": kwargs
             }
-            cache_key = f"{func.__name__}:{hashlib.md5(str(key_parts).encode()).hexdigest()}"
+            key_str = json.dumps(key_parts, sort_keys=True, default=str)
+            cache_key = f"{func.__name__}:{hashlib.md5(key_str.encode()).hexdigest()}"
 
             cached_result = cache_instance.cache.get(cache_key)
             if cached_result is not None:

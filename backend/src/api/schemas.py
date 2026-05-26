@@ -1,3 +1,4 @@
+import os
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 import re
@@ -37,9 +38,10 @@ class IngestRequest(BaseModel):
     @classmethod
     def validate_path(cls, v: Optional[str]) -> Optional[str]:
         if v is not None:
-            if ".." in v or v.startswith("/"):
-                raise ValueError("Invalid path")
             v = v.strip()
+            normalized = os.path.normpath(v)
+            if normalized.startswith("..") or normalized.startswith("/") or ".." in normalized.split(os.sep):
+                raise ValueError("Invalid path")
         return v
 
 
@@ -64,10 +66,16 @@ class SchemaResponse(BaseModel):
     relationship_types: List[str]
 
 
+class DurationStats(BaseModel):
+    count: int
+    sum: float
+    avg: float
+
+
 class MetricsResponse(BaseModel):
     requests_total: Dict[str, int]
     errors_total: Dict[str, int]
-    request_duration_ms: Dict[str, List[float]]
+    request_duration_ms: Dict[str, DurationStats]
     neo4j_pool: Dict[str, int]
 
 

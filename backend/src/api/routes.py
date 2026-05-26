@@ -1,7 +1,7 @@
 import os
 import time
 import threading
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
 from loguru import logger
 import tempfile
@@ -36,22 +36,84 @@ from .schemas import (
 )
 from ..core.neo4j_client import get_neo4j_client
 from ..core.config import get_settings
-from ..core.cache import get_graph_data_cache, get_search_cache
-from ..core.hierarchical_communities import get_hierarchical_manager
-from ..core.llm_cache import get_llm_cache
-from ..retrieval.vector_retriever import VectorRetriever
-from ..retrieval.graph_retriever import GraphRetriever
-from ..retrieval.drift_search import DRIFTSearch, drift_search, explain_drift_strategy
-from ..core.community_detector import CommunityDetector, get_community_detector
-from ..core.summary_generator import SummaryGenerator, get_summary_generator
-from ..workflow.graph import run_workflow
-from ..ingestion.document_loader import load_documents_from_directory
-from ..ingestion.kg_builder import KnowledgeGraphBuilder
-from ..core.metrics import get_metrics, get_metrics_middleware
 from ..utils.logger import get_request_id
 
 router = APIRouter()
-_metrics_middleware = get_metrics_middleware()
+
+
+def _get_metrics_middleware():
+    from ..core.metrics import get_metrics_middleware
+    return get_metrics_middleware()
+
+
+_metrics_middleware = None
+
+
+def _get_middleware():
+    global _metrics_middleware
+    if _metrics_middleware is None:
+        _metrics_middleware = _get_metrics_middleware()
+    return _metrics_middleware
+
+
+def _get_run_workflow():
+    from ..workflow.graph import run_workflow
+    return run_workflow
+
+
+def _get_kg_builder():
+    from ..ingestion.kg_builder import KnowledgeGraphBuilder
+    return KnowledgeGraphBuilder
+
+
+def _get_vector_retriever():
+    from ..retrieval.vector_retriever import VectorRetriever
+    return VectorRetriever
+
+
+def _get_graph_retriever():
+    from ..retrieval.graph_retriever import GraphRetriever
+    return GraphRetriever
+
+
+def _get_drift_search():
+    from ..retrieval.drift_search import DRIFTSearch
+    return DRIFTSearch
+
+
+def _get_graph_data_cache():
+    from ..core.cache import get_graph_data_cache
+    return get_graph_data_cache()
+
+
+def _get_search_cache():
+    from ..core.cache import get_search_cache
+    return get_search_cache()
+
+
+def _get_community_detector():
+    from ..core.community_detector import get_community_detector
+    return get_community_detector()
+
+
+def _get_summary_generator():
+    from ..core.summary_generator import get_summary_generator
+    return get_summary_generator()
+
+
+def _get_hierarchical_manager():
+    from ..core.hierarchical_communities import get_hierarchical_manager
+    return get_hierarchical_manager()
+
+
+def _get_llm_cache():
+    from ..core.llm_cache import get_llm_cache
+    return get_llm_cache()
+
+
+def _get_metrics():
+    from ..core.metrics import get_metrics
+    return get_metrics()
 
 _start_time = time.time()
 
@@ -122,7 +184,7 @@ async def readiness_check():
 
 @router.get("/metrics", response_model=MetricsResponse)
 async def get_metrics_endpoint():
-    metrics = get_metrics()
+    metrics = _get_metrics()
     all_metrics = metrics.get_metrics()
 
     return MetricsResponse(
@@ -136,7 +198,7 @@ async def get_metrics_endpoint():
 @router.get("/metrics/prometheus")
 async def get_prometheus_metrics():
     """Prometheus-compatible metrics endpoint"""
-    metrics = get_metrics()
+    metrics = _get_metrics()
     prometheus_text = metrics.export_prometheus()
     from fastapi.responses import PlainTextResponse
     return PlainTextResponse(content=prometheus_text, media_type="text/plain; version=0.0.4; charset=utf-8")
@@ -194,6 +256,7 @@ async def search(request: QuestionRequest):
     logger.info(f"[{request_id}] Received search query: {request.question}")
 
     try:
+        run_workflow = _get_run_workflow()
         result = run_workflow(request.question, history=request.history)
         return _build_question_response(result)
     except Exception as e:
@@ -207,6 +270,7 @@ async def query(request: QuestionRequest):
     logger.info(f"[{request_id}] Received query: {request.question}")
 
     try:
+        run_workflow = _get_run_workflow()
         result = run_workflow(request.question, history=request.history)
         return _build_question_response(result)
     except Exception as e:
@@ -251,6 +315,7 @@ async def ingest_documents(request: IngestRequest):
     logger.info("Received ingest request")
 
     try:
+        KnowledgeGraphBuilder = _get_kg_builder()
         builder = KnowledgeGraphBuilder()
         results = []
 
@@ -265,6 +330,8 @@ async def ingest_documents(request: IngestRequest):
             )
             results.append(result)
         elif request.directory:
+            from ..ingestion.document_loader import load_documents_from_directory
+
             docs = load_documents_from_directory(request.directory)
             for doc in docs:
                 result = builder.ingest_document(
@@ -319,6 +386,7 @@ async def upload_and_ingest(
         from ..ingestion.document_loader import load_document
 
         doc = load_document(tmp_path)
+        KnowledgeGraphBuilder = _get_kg_builder()
         builder = KnowledgeGraphBuilder()
         result = builder.ingest_document(
             doc,
@@ -351,6 +419,7 @@ async def upload_and_ingest(
 @router.post("/retrieval/vector")
 async def vector_search(query: str, top_k: int = 5):
     try:
+        VectorRetriever = _get_vector_retriever()
         retriever = VectorRetriever()
         results = retriever.search(query, top_k=top_k)
         return {"results": results}
@@ -381,6 +450,7 @@ async def graph_search(query: str):
 @router.post("/retrieval/hybrid", response_model=HybridSearchResponse)
 async def hybrid_search(request: HybridSearchRequest):
     try:
+        DRIFTSearch = _get_drift_search()
         searcher = DRIFTSearch()
         results = searcher.hybrid_search(request.query, alpha=request.alpha)
         return HybridSearchResponse(**results)
@@ -397,7 +467,7 @@ async def get_graph_data(
 ):
     """获取图谱数据"""
     cache_key = f"{node_label or 'all'}:{limit}:{offset}"
-    cache = get_graph_data_cache()
+    cache = _get_graph_data_cache()
     
     cached_result = cache.raw_get(cache_key)
     if cached_result is not None:
@@ -442,7 +512,7 @@ async def search_nodes(
             - regex: 正则表达式匹配
     """
     cache_key = f"{query}:{node_label or 'all'}:{limit}:{fuzzy}:{fuzzy_mode}"
-    cache = get_search_cache()
+    cache = _get_search_cache()
     
     cached_result = cache.raw_get(cache_key)
     if cached_result is not None:
@@ -573,6 +643,7 @@ async def get_query_result_graph(request: QueryResultRequest):
 async def get_chunk_parent(chunk_id: str):
     """获取 chunk 所属的父文档"""
     try:
+        GraphRetriever = _get_graph_retriever()
         retriever = GraphRetriever()
         result = retriever.get_chunk_parent(chunk_id)
         if not result:
@@ -592,6 +663,7 @@ async def get_chunk_context(
 ):
     """获取 chunk 及其上下文"""
     try:
+        GraphRetriever = _get_graph_retriever()
         retriever = GraphRetriever()
         result = retriever.get_chunk_context(chunk_id, context_chunks=context_chunks)
         if not result:
@@ -608,6 +680,7 @@ async def get_chunk_context(
 async def reconstruct_document(document_id: str):
     """从 chunks 重构完整文档"""
     try:
+        GraphRetriever = _get_graph_retriever()
         retriever = GraphRetriever()
         result = retriever.reconstruct_document(document_id)
         if not result:
@@ -627,6 +700,7 @@ async def find_chunks_by_entity(
 ):
     """查找包含指定实体的所有 chunks"""
     try:
+        GraphRetriever = _get_graph_retriever()
         retriever = GraphRetriever()
         chunks = retriever.find_chunks_by_entity(entity_name, limit=limit)
         return EntityChunksResponse(
@@ -653,6 +727,7 @@ async def multi_hop_search(
     - 2跳：硝苯地平 -> 头痛 (SIDE_EFFECT)
     """
     try:
+        GraphRetriever = _get_graph_retriever()
         retriever = GraphRetriever()
 
         rel_types = None
@@ -690,6 +765,7 @@ async def find_related_entities(
     - HAS_SYMPTOM: [头痛, 头晕]
     """
     try:
+        GraphRetriever = _get_graph_retriever()
         retriever = GraphRetriever()
 
         rel_filter = None
@@ -715,6 +791,7 @@ async def get_document_chunks(
 ):
     """获取文档的所有 chunks"""
     try:
+        GraphRetriever = _get_graph_retriever()
         retriever = GraphRetriever()
         chunks = retriever.get_document_chunks(document_id, limit=limit)
         return {
@@ -763,7 +840,8 @@ async def drift_search_endpoint(
 ):
     """DRIFT搜索 - 根据查询意图自动选择检索策略"""
     try:
-        results = drift_search(query, strategy=strategy)
+        from ..retrieval.drift_search import drift_search as _drift_search
+        results = _drift_search(query, strategy=strategy)
         return results
     except Exception as e:
         logger.error(f"DRIFT search failed: {e}")
@@ -774,6 +852,7 @@ async def drift_search_endpoint(
 async def explain_drift_endpoint(query: str):
     """解释DRIFT搜索策略选择"""
     try:
+        from ..retrieval.drift_search import explain_drift_strategy
         explanation = explain_drift_strategy(query)
         return explanation
     except Exception as e:
@@ -785,7 +864,7 @@ async def explain_drift_endpoint(query: str):
 async def detect_communities():
     """检测知识图谱中的社区结构"""
     try:
-        detector = get_community_detector()
+        detector = _get_community_detector()
         communities = detector.get_communities()
         top_communities = detector.get_top_communities(top_n=5)
         
@@ -803,7 +882,7 @@ async def detect_communities():
 async def get_community_members(community_id: int):
     """获取指定社区的成员列表"""
     try:
-        detector = get_community_detector()
+        detector = _get_community_detector()
         members = detector.get_community_members(community_id)
         centrality = detector.compute_community_centrality(community_id)
         
@@ -822,7 +901,7 @@ async def get_community_members(community_id: int):
 async def get_entity_community(entity_name: str):
     """获取实体所属的社区"""
     try:
-        detector = get_community_detector()
+        detector = _get_community_detector()
         community_id = detector.get_entity_community(entity_name)
         
         if community_id is None:
@@ -849,7 +928,7 @@ async def get_entity_community(entity_name: str):
 async def get_entity_summary(entity_name: str):
     """获取实体摘要"""
     try:
-        generator = get_summary_generator()
+        generator = _get_summary_generator()
         summary = generator.generate_entity_summary(entity_name)
         return {"entity_name": entity_name, "summary": summary}
     except Exception as e:
@@ -861,7 +940,7 @@ async def get_entity_summary(entity_name: str):
 async def get_community_summary(community_id: int, level: int = Query(default=0)):
     """获取社区摘要"""
     try:
-        generator = get_summary_generator()
+        generator = _get_summary_generator()
         summary = generator.generate_community_summary(community_id, level)
         return {"community_id": community_id, "level": level, "summary": summary}
     except Exception as e:
@@ -873,7 +952,7 @@ async def get_community_summary(community_id: int, level: int = Query(default=0)
 async def get_global_summary():
     """获取全局摘要"""
     try:
-        generator = get_summary_generator()
+        generator = _get_summary_generator()
         summary = generator.generate_global_summary()
         return {"summary": summary}
     except Exception as e:
@@ -885,7 +964,7 @@ async def get_global_summary():
 async def summarize_query_context(query: str):
     """根据查询生成相关摘要上下文"""
     try:
-        generator = get_summary_generator()
+        generator = _get_summary_generator()
         context = generator.summarize_query_context(query)
         return context
     except Exception as e:
@@ -1005,14 +1084,14 @@ async def get_document_version(document_id: str):
 @router.get("/community/stats")
 async def get_community_stats():
     """获取分层社区统计信息"""
-    manager = get_hierarchical_manager()
+    manager = _get_hierarchical_manager()
     return manager.get_stats()
 
 
 @router.get("/community/level/{level}")
 async def get_communities_at_level(level: int):
     """获取指定层级的所有社区"""
-    manager = get_hierarchical_manager()
+    manager = _get_hierarchical_manager()
     try:
         communities = manager.get_communities_by_level(level)
         return {
@@ -1029,7 +1108,7 @@ async def get_communities_at_level(level: int):
 @router.get("/community/{level}/{community_id}")
 async def get_community_detail(level: int, community_id: int):
     """获取社区详情"""
-    manager = get_hierarchical_manager()
+    manager = _get_hierarchical_manager()
     try:
         members = manager.get_community_members(level, community_id)
         summary = manager.get_community_summary(level, community_id)
@@ -1051,7 +1130,7 @@ async def get_community_detail(level: int, community_id: int):
 @router.get("/cache/stats")
 async def get_cache_stats():
     """获取 LLM 缓存统计"""
-    cache = get_llm_cache()
+    cache = _get_llm_cache()
     stats = cache.get_stats()
     stats["hit_rate"] = cache.get_hit_rate()
     return stats
@@ -1060,7 +1139,7 @@ async def get_cache_stats():
 @router.post("/cache/clear")
 async def clear_cache():
     """清空 LLM 缓存"""
-    cache = get_llm_cache()
+    cache = _get_llm_cache()
     cache.clear()
     return {"status": "cleared"}
 

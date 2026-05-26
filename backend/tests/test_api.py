@@ -298,7 +298,7 @@ class TestGraphAPI:
 class TestIngestAPI:
     """文档摄取API测试"""
     
-    @patch('src.api.routes.KnowledgeGraphBuilder')
+    @patch('src.ingestion.kg_builder.KnowledgeGraphBuilder')
     @patch('src.ingestion.document_loader.load_document')
     @patch('src.api.routes.get_neo4j_client')
     def test_ingest_file_success(self, mock_get_client, mock_load_doc, mock_builder_class):
@@ -325,8 +325,8 @@ class TestIngestAPI:
         )
         assert response.status_code == 200
     
-    @patch('src.api.routes.KnowledgeGraphBuilder')
-    @patch('src.api.routes.load_documents_from_directory')
+    @patch('src.ingestion.kg_builder.KnowledgeGraphBuilder')
+    @patch('src.ingestion.document_loader.load_documents_from_directory')
     @patch('src.api.routes.get_neo4j_client')
     def test_ingest_directory_success(self, mock_get_client, mock_load_dir, mock_builder_class):
         """测试目录摄取成功"""
@@ -359,7 +359,7 @@ class TestIngestAPI:
 class TestQueryAPI:
     """问答API测试"""
     
-    @patch('src.api.routes.run_workflow')
+    @patch('src.workflow.graph.run_workflow')
     @patch('src.api.routes.get_neo4j_client')
     def test_query_success(self, mock_get_client, mock_run_workflow):
         """测试问答成功"""
@@ -406,7 +406,7 @@ class TestSchemaAPI:
 class TestMetricsAPI:
     """Metrics API测试"""
     
-    @patch('src.api.routes.get_metrics')
+    @patch('src.core.metrics.get_metrics')
     def test_get_metrics_success(self, mock_get_metrics):
         """测试获取指标成功"""
         mock_metrics = Mock()

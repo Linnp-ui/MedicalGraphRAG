@@ -15,6 +15,9 @@ from .embedding import EmbeddingClient, get_embedding_client
 from .medical_processor import MedicalTextProcessor
 from .knowledge_fusion import KnowledgeFusionEngine
 from .medical_ner import MedicalNER
+from ..utils.process_monitor import track_process, get_structured_logger
+
+_structured_logger = get_structured_logger("ingestion")
 
 
 @dataclass
@@ -139,6 +142,7 @@ class KnowledgeGraphBuilder:
             logger.warning(f"Failed to check document by ID: {e}")
         return False
 
+    @track_process("ingestion.ingest_document")
     def ingest_document(
         self,
         document: Document,
@@ -157,6 +161,14 @@ class KnowledgeGraphBuilder:
         Returns:
             摄入结果，包含文档ID、创建的文本块数、提取的实体数和创建的关系数
         """
+        _structured_logger.info(
+            "ingest_document_started",
+            document_id=document.id,
+            content_length=len(document.content),
+            extract_entities=extract_entities,
+            create_embeddings=create_embeddings,
+        )
+        
         content_hash = hashlib.sha256(document.content.encode()).hexdigest()
 
         if skip_duplicate:
@@ -313,6 +325,14 @@ class KnowledgeGraphBuilder:
 
         results["entities_extracted"] = len(fused_entity_map)
         results["relationships_created"] = len(fused_relationships)
+
+        _structured_logger.info(
+            "ingest_document_completed",
+            document_id=document.id,
+            chunks_created=results["chunks_created"],
+            entities_extracted=results["entities_extracted"],
+            relationships_created=results["relationships_created"],
+        )
 
         logger.info(f"Document {document.id} ingested: {results}")
         return results

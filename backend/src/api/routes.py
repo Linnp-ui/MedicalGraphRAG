@@ -1213,3 +1213,39 @@ async def clear_errors(before: Optional[float] = Query(None, description="Clear 
     count = collector.clear_errors(before=before)
     
     return {"status": "cleared", "count": count}
+
+
+# ─── 流程监控 API ────────────────────────────────────────────────────────────────
+
+
+@router.get("/monitoring/process/stats")
+async def get_process_stats(process_name: Optional[str] = Query(None, description="Filter by process name")):
+    """获取流程执行统计信息"""
+    from ..utils.process_monitor import get_process_monitor
+    
+    monitor = get_process_monitor()
+    stats = monitor.get_stats(process_name)
+    
+    return {"stats": stats}
+
+
+@router.get("/monitoring/process/active")
+async def get_active_processes():
+    """获取当前正在执行的流程"""
+    from ..utils.process_monitor import get_process_monitor
+    
+    monitor = get_process_monitor()
+    active = monitor.get_active_processes()
+    
+    return {"active_processes": active, "count": len(active)}
+
+
+@router.post("/monitoring/process/clear")
+async def clear_process_stats():
+    """清空流程统计信息"""
+    from ..utils.process_monitor import get_process_monitor
+    
+    monitor = get_process_monitor()
+    monitor.clear_stats()
+    
+    return {"status": "cleared"}

@@ -12,6 +12,9 @@ from .nodes import (
 )
 from ..core.circuit_breaker import get_circuit_breaker
 from ..retrieval.drift_search import DRIFTSearch
+from ..utils.process_monitor import track_process, get_structured_logger
+
+_structured_logger = get_structured_logger("workflow")
 
 
 def should_degrade(state: GraphState) -> bool:
@@ -73,6 +76,7 @@ def get_async_workflow() -> StateGraph:
     return _async_workflow
 
 
+@track_process("workflow.run")
 def run_workflow(question: str, history: List[Dict[str, str]] | None = None) -> dict:
     workflow = get_workflow()
 
@@ -90,19 +94,43 @@ def run_workflow(question: str, history: List[Dict[str, str]] | None = None) -> 
         "error": None,
     }
 
+    _structured_logger.info(
+        "workflow_started",
+        question_length=len(question),
+        has_history=bool(history),
+    )
+
     try:
         if should_degrade(initial_state):
             logger.warning("Service in degraded mode, using simplified response")
+            _structured_logger.warning(
+                "workflow_degraded",
+                reason="circuit_breaker_open",
+            )
             return _degraded_response(question, initial_state)
 
         result = workflow.invoke(initial_state)
+        
+        _structured_logger.info(
+            "workflow_completed",
+            routing=result.get("routing", "unknown"),
+            documents_count=len(result.get("documents", [])),
+            answer_length=len(result.get("answer", "")),
+        )
+        
         return result
     except Exception as e:
         logger.error(f"Workflow execution failed: {e}")
+        _structured_logger.error(
+            "workflow_failed",
+            error_type=type(e).__name__,
+            error_message=str(e),
+        )
         initial_state["error"] = str(e)
         return _degraded_response(question, initial_state)
 
 
+@track_process("workflow.run_async")
 async def run_workflow_async(question: str, history: List[Dict[str, str]] | None = None) -> dict:
     """Run the workflow with async LLM calls for non-blocking execution"""
     workflow = get_async_workflow()
@@ -121,15 +149,38 @@ async def run_workflow_async(question: str, history: List[Dict[str, str]] | None
         "error": None,
     }
 
+    _structured_logger.info(
+        "async_workflow_started",
+        question_length=len(question),
+        has_history=bool(history),
+    )
+
     try:
         if should_degrade(initial_state):
             logger.warning("Service in degraded mode, using simplified response")
+            _structured_logger.warning(
+                "async_workflow_degraded",
+                reason="circuit_breaker_open",
+            )
             return _degraded_response(question, initial_state)
 
         result = await workflow.ainvoke(initial_state)
+        
+        _structured_logger.info(
+            "async_workflow_completed",
+            routing=result.get("routing", "unknown"),
+            documents_count=len(result.get("documents", [])),
+            answer_length=len(result.get("answer", "")),
+        )
+        
         return result
     except Exception as e:
         logger.error(f"Async workflow execution failed: {e}")
+        _structured_logger.error(
+            "async_workflow_failed",
+            error_type=type(e).__name__,
+            error_message=str(e),
+        )
         initial_state["error"] = str(e)
         return _degraded_response(question, initial_state)
 

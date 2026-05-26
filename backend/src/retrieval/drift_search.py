@@ -6,6 +6,9 @@ from .graph_retriever import GraphRetriever
 from ..core.community_detector import get_community_detector
 from ..core.summary_generator import get_summary_generator
 from ..core.cache import cached, get_query_cache
+from ..utils.process_monitor import track_process, get_structured_logger
+
+_structured_logger = get_structured_logger("retrieval")
 
 
 class DRIFTSearch:
@@ -69,9 +72,16 @@ class DRIFTSearch:
             return "hybrid"
 
     @cached(get_query_cache)
+    @track_process("retrieval.global_search")
     def global_search(self, query: str, top_k: int = 3) -> Dict[str, Any]:
         """全局搜索 - 使用社区摘要回答总结性问题"""
         logger.info(f"Executing global search for: {query}")
+        
+        _structured_logger.info(
+            "global_search_started",
+            query_length=len(query),
+            top_k=top_k,
+        )
         
         global_summary = self.summary_generator.generate_global_summary()
         
@@ -81,18 +91,32 @@ class DRIFTSearch:
         for comm_id, count in top_communities:
             community_summaries[comm_id] = self.summary_generator.generate_community_summary(comm_id)
         
-        return {
+        result = {
             "search_type": "global",
             "query": query,
             "global_summary": global_summary,
             "community_summaries": community_summaries,
             "top_communities": top_communities,
         }
+        
+        _structured_logger.info(
+            "global_search_completed",
+            community_count=len(community_summaries),
+        )
+        
+        return result
 
     @cached(get_query_cache)
+    @track_process("retrieval.local_search")
     def local_search(self, query: str, top_k: int = 10) -> Dict[str, Any]:
         """局部搜索 - 从实体出发进行精细化推理"""
         logger.info(f"Executing local search for: {query}")
+        
+        _structured_logger.info(
+            "local_search_started",
+            query_length=len(query),
+            top_k=top_k,
+        )
         
         entities = self.graph_retriever.find_entities_by_embedding(query, limit=top_k)
         
@@ -113,14 +137,23 @@ class DRIFTSearch:
                 "relationships": relationships,
             })
         
-        return {
+        result = {
             "search_type": "local",
             "query": query,
             "results": results,
             "entity_count": len(results),
         }
+        
+        _structured_logger.info(
+            "local_search_completed",
+            entity_count=len(results),
+            found_entities=bool(entities),
+        )
+        
+        return result
 
     @cached(get_query_cache)
+    @track_process("retrieval.hybrid_search")
     def hybrid_search(self, query: str, alpha: Optional[float] = None) -> Dict[str, Any]:
         """混合搜索 - 结合向量和图谱检索"""
         logger.info(f"Executing hybrid search for: {query}")
@@ -128,12 +161,18 @@ class DRIFTSearch:
         if alpha is None:
             alpha = self._compute_dynamic_alpha(query)
         
+        _structured_logger.info(
+            "hybrid_search_started",
+            query_length=len(query),
+            alpha=alpha,
+        )
+        
         vector_results = self.vector_retriever.search(query, top_k=self.vector_top_k)
         graph_results = self.graph_retriever.find_entities_by_embedding(query, limit=self.graph_top_k)
         
         combined_results = self._combine_results(query, vector_results, graph_results, alpha)
         
-        return {
+        result = {
             "search_type": "hybrid",
             "query": query,
             "alpha": alpha,
@@ -141,6 +180,15 @@ class DRIFTSearch:
             "graph_results": graph_results,
             "combined_results": combined_results,
         }
+        
+        _structured_logger.info(
+            "hybrid_search_completed",
+            vector_count=len(vector_results),
+            graph_count=len(graph_results),
+            combined_count=len(combined_results),
+        )
+        
+        return result
 
     def _compute_dynamic_alpha(self, query: str) -> float:
         """动态计算alpha权重"""

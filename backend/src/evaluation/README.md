@@ -38,6 +38,35 @@ src/evaluation/
 - 实体召回率 ≥ 70%
 - 回答相关性 ≥ 70%
 
+### 5. 使用生成的黄金评估集
+
+从知识库自动生成的 79 条 QA 用例，覆盖疾病、药物、诊断、编码等类别：
+
+```bash
+# 使用生成的集运行评估
+python -c "
+from src.evaluation import OfflineEvaluator, load_generated_dataset
+
+evaluator = OfflineEvaluator()
+evaluator.load_generated_dataset('golden_set/generated_golden.json')
+report = evaluator.run_evaluation()
+evaluator.save_report(report)
+"
+```
+
+```python
+# 代码中直接加载
+from src.evaluation import load_generated_dataset, load_generated_golden_set
+
+# 加载为 BenchmarkDataset（用于离线评估）
+dataset = load_generated_dataset()
+
+# 加载为 MedicalGoldenCase 列表（用于安全评估）
+cases = load_generated_golden_set()
+```
+
+详见 `golden_set/` 目录。
+
 ## 快速开始
 
 ### 1. 运行演示评估

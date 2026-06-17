@@ -1,6 +1,7 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+import re
 
 from loguru import logger
 
@@ -8,10 +9,79 @@ from .vector_retriever import VectorRetriever
 from .graph_retriever import GraphRetriever
 from ..core.cache import cached, get_query_cache
 
+if TYPE_CHECKING:
+    from ..chains.medical_intent import MedicalIntent, IntentResult
+
+INTENT_ALPHA_MAP: Dict[str, float] = {
+    "disease_query": 0.6,
+    "drug_query": 0.4,
+    "drug_interaction": 0.3,
+    "symptom_query": 0.7,
+    "diagnosis_assist": 0.5,
+    "treatment_query": 0.5,
+    "examination_query": 0.7,
+    "prevention_query": 0.5,
+    "health_advice": 0.5,
+    "medical_knowledge": 0.6,
+    "unknown": 0.5,
+}
+
+
+class CrossEncoderReranker:
+    def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"):
+        self.model_name = model_name
+        self._model = None
+
+    def _load_model(self):
+        if self._model is None:
+            try:
+                from sentence_transformers import CrossEncoder
+                self._model = CrossEncoder(self.model_name)
+                logger.info(f"CrossEncoder model loaded: {self.model_name}")
+            except Exception as e:
+                logger.warning(f"Failed to load CrossEncoder model: {e}")
+                self._model = None
+
+    def rerank(self, query: str, results: List[Dict[str, Any]], top_k: int = 10) -> List[Dict[str, Any]]:
+        if not results:
+            return results
+
+        self._load_model()
+        if self._model is None:
+            return results
+
+        pairs = [(query, r.get("content", "") or r.get("text", "") or "") for r in results]
+        try:
+            scores = self._model.predict(pairs)
+            for i, score in enumerate(scores):
+                results[i]["rerank_score"] = float(score)
+            results.sort(key=lambda x: x.get("rerank_score", 0), reverse=True)
+            return results[:top_k]
+        except Exception as e:
+            logger.warning(f"CrossEncoder reranking failed: {e}")
+            return results
+
+
+class IntentAwareAlpha:
+    @staticmethod
+    def detect_intent_from_query(query: str) -> str:
+        from ..chains.medical_intent import MedicalIntentClassifier
+        classifier = MedicalIntentClassifier()
+        try:
+            result = classifier.classify(query)
+            intent_str = result.intent.value if hasattr(result.intent, 'value') else str(result.intent)
+            return intent_str
+        except Exception:
+            return "unknown"
+
+    @staticmethod
+    def get_alpha(intent: Optional[str]) -> float:
+        if intent and intent in INTENT_ALPHA_MAP:
+            return INTENT_ALPHA_MAP[intent]
+        return 0.5
+
 
 class HybridRetriever:
-    """Hybrid retrieval combining vector and graph search"""
-
     def __init__(
         self,
         alpha: float = 0.5,
@@ -19,68 +89,67 @@ class HybridRetriever:
         graph_top_k: int = 10,
         enable_parallel: bool = True,
         enable_entity_embedding: bool = True,
+        enable_cross_encoder: bool = True,
+        enable_dynamic_alpha: bool = True,
+        rerank_top_k: int = 10,
     ):
-        """
-        Initialize hybrid retriever
-
-        Args:
-            alpha: Weight for vector search (1-alpha for graph search)
-            vector_top_k: Number of results from vector search
-            graph_top_k: Number of results from graph search
-            enable_parallel: Whether to parallelize vector and graph search
-            enable_entity_embedding: Whether to use embedding-based entity matching
-        """
         self.alpha = alpha
+        self.fixed_alpha = alpha
         self.vector_top_k = vector_top_k
         self.graph_top_k = graph_top_k
         self.enable_parallel = enable_parallel
         self.enable_entity_embedding = enable_entity_embedding
+        self.enable_cross_encoder = enable_cross_encoder
+        self.enable_dynamic_alpha = enable_dynamic_alpha
+        self.rerank_top_k = rerank_top_k
         self.vector_retriever = VectorRetriever()
         self.graph_retriever = GraphRetriever()
         self._executor = ThreadPoolExecutor(max_workers=2)
         self._closed = False
+        if self.enable_cross_encoder:
+            self._reranker = CrossEncoderReranker()
+        else:
+            self._reranker = None
 
     def close(self, wait: bool = True):
-        """关闭线程池执行器，释放资源
-
-        Args:
-            wait: 是否等待所有任务完成
-        """
         if not self._closed:
             self._executor.shutdown(wait=wait)
             self._closed = True
             logger.info("HybridRetriever executor closed")
 
     def __del__(self):
-        """对象销毁时自动关闭执行器"""
         self.close(wait=False)
 
     def __enter__(self):
-        """支持上下文管理器"""
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """上下文退出时关闭执行器"""
         self.close()
         return False
+
+    def _resolve_intent(self, query: str) -> str:
+        intent = IntentAwareAlpha.detect_intent_from_query(query)
+        return intent
+
+    def _resolve_alpha(self, query: str, intent: Optional[str]) -> float:
+        if intent:
+            return IntentAwareAlpha.get_alpha(intent)
+        if self.enable_dynamic_alpha:
+            detected = self._resolve_intent(query)
+            return IntentAwareAlpha.get_alpha(detected)
+        return self.fixed_alpha
 
     @cached(get_query_cache)
     def search(
         self,
         query: str,
         filters: Optional[Dict[str, Any]] = None,
+        intent: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """执行混合搜索，结合向量搜索和图谱搜索结果
-
-        Args:
-            query: 搜索查询
-            filters: 可选的过滤条件
-
-        Returns:
-            包含向量搜索结果、图谱搜索结果和组合结果的字典
-        """
         vector_results = []
         graph_results = []
+
+        self.alpha = self._resolve_alpha(query, intent)
 
         if self.enable_parallel:
             vector_results, graph_results = self._parallel_search(query, filters)
@@ -90,12 +159,17 @@ class HybridRetriever:
 
         combined_results = self._combine_results(vector_results, graph_results)
 
+        if self.enable_cross_encoder and self._reranker and combined_results:
+            combined_results = self._reranker.rerank(query, combined_results, top_k=self.rerank_top_k)
+
         return {
             "vector_results": vector_results,
             "graph_results": graph_results,
             "combined_results": combined_results,
             "query": query,
             "alpha_used": self.alpha,
+            "intent_used": intent or (self._resolve_intent(query) if self.enable_dynamic_alpha else None),
+            "reranker_enabled": self.enable_cross_encoder,
         }
 
     def _parallel_search(
@@ -103,15 +177,6 @@ class HybridRetriever:
         query: str,
         filters: Optional[Dict[str, Any]],
     ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-        """并行执行向量搜索和图谱搜索
-
-        Args:
-            query: 搜索查询
-            filters: 可选的过滤条件
-
-        Returns:
-            向量搜索结果和图谱搜索结果的元组
-        """
         vector_future = self._executor.submit(self._vector_search, query, filters)
         graph_future = self._executor.submit(self._graph_search, query, filters)
 
@@ -125,15 +190,6 @@ class HybridRetriever:
         query: str,
         filters: Optional[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
-        """获取向量搜索结果
-
-        Args:
-            query: 搜索查询
-            filters: 可选的过滤条件
-
-        Returns:
-            向量搜索结果列表
-        """
         try:
             return self.vector_retriever.search(
                 query=query,
@@ -149,15 +205,6 @@ class HybridRetriever:
         query: str,
         filters: Optional[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
-        """获取基于实体嵌入的图谱搜索结果
-
-        Args:
-            query: 搜索查询
-            filters: 可选的过滤条件
-
-        Returns:
-            图谱搜索结果列表
-        """
         try:
             if self.enable_entity_embedding:
                 entities = self.graph_retriever.find_entities_by_embedding(
@@ -184,14 +231,6 @@ class HybridRetriever:
             return []
 
     def _get_chunks_for_entity(self, entity_name: str) -> List[Dict[str, Any]]:
-        """获取包含特定实体的文本块
-
-        Args:
-            entity_name: 实体名称
-
-        Returns:
-            包含该实体的文本块列表
-        """
         client = self.graph_retriever._get_neo4j_client()
 
         query = """
@@ -214,15 +253,6 @@ class HybridRetriever:
         vector_results: List[Dict[str, Any]],
         graph_results: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
-        """组合并排序来自两个来源的结果
-
-        Args:
-            vector_results: 向量搜索结果
-            graph_results: 图谱搜索结果
-
-        Returns:
-            按综合得分排序的组合结果列表
-        """
         seen_chunks = {}
         seen_docs = {}
         combined = []
@@ -281,7 +311,13 @@ def hybrid_search(
     query: str,
     alpha: float = 0.5,
     filters: Optional[Dict[str, Any]] = None,
+    intent: Optional[str] = None,
+    enable_cross_encoder: bool = True,
+    enable_dynamic_alpha: bool = True,
 ) -> Dict[str, Any]:
-    """Convenience function for hybrid search"""
-    retriever = HybridRetriever(alpha=alpha)
-    return retriever.search(query, filters)
+    retriever = HybridRetriever(
+        alpha=alpha,
+        enable_cross_encoder=enable_cross_encoder,
+        enable_dynamic_alpha=enable_dynamic_alpha,
+    )
+    return retriever.search(query, filters, intent=intent)

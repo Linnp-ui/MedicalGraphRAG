@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any, Dict, List, Optional, Tuple, Union
 from loguru import logger
 
@@ -152,6 +153,53 @@ class DRIFTSearch:
         
         return result
 
+    @track_process("retrieval.local_search_async")
+    async def local_search_async(self, query: str, top_k: int = 10) -> Dict[str, Any]:
+        """局部搜索 - 异步版本"""
+        logger.info(f"Executing async local search for: {query}")
+        
+        _structured_logger.info(
+            "local_search_async_started",
+            query_length=len(query),
+            top_k=top_k,
+        )
+        
+        entities = await self.graph_retriever.find_entities_by_embedding_async(query, limit=top_k)
+        
+        if not entities:
+            entities = await self.graph_retriever.find_entities_async(entity_name=query, limit=top_k)
+        
+        results = []
+        for entity in entities:
+            entity_name = entity.get("name")
+            if not entity_name:
+                continue
+            relationships = await self.graph_retriever.find_relationships_async(entity_name, depth=2, limit=5)
+            summary = self.summary_generator.generate_entity_summary(entity_name)
+            
+            results.append({
+                "entity": entity_name,
+                "type": entity.get("type"),
+                "score": entity.get("score", 1.0),
+                "summary": summary,
+                "relationships": relationships,
+            })
+        
+        result = {
+            "search_type": "local",
+            "query": query,
+            "results": results,
+            "entity_count": len(results),
+        }
+        
+        _structured_logger.info(
+            "local_search_async_completed",
+            entity_count=len(results),
+            found_entities=bool(entities),
+        )
+        
+        return result
+
     @cached(get_query_cache)
     @track_process("retrieval.hybrid_search")
     def hybrid_search(self, query: str, alpha: Optional[float] = None) -> Dict[str, Any]:
@@ -183,6 +231,46 @@ class DRIFTSearch:
         
         _structured_logger.info(
             "hybrid_search_completed",
+            vector_count=len(vector_results),
+            graph_count=len(graph_results),
+            combined_count=len(combined_results),
+        )
+        
+        return result
+
+    @track_process("retrieval.hybrid_search_async")
+    async def hybrid_search_async(self, query: str, alpha: Optional[float] = None) -> Dict[str, Any]:
+        """混合搜索 - 异步版本"""
+        logger.info(f"Executing async hybrid search for: {query}")
+        
+        if alpha is None:
+            alpha = self._compute_dynamic_alpha(query)
+        
+        _structured_logger.info(
+            "hybrid_search_async_started",
+            query_length=len(query),
+            alpha=alpha,
+        )
+        
+        # 并行执行向量和图谱检索
+        vector_task = asyncio.create_task(self.vector_retriever.search_async(query, top_k=self.vector_top_k))
+        graph_task = asyncio.create_task(self.graph_retriever.find_entities_by_embedding_async(query, limit=self.graph_top_k))
+        
+        vector_results, graph_results = await asyncio.gather(vector_task, graph_task)
+        
+        combined_results = self._combine_results(query, vector_results, graph_results, alpha)
+        
+        result = {
+            "search_type": "hybrid",
+            "query": query,
+            "alpha": alpha,
+            "vector_results": vector_results,
+            "graph_results": graph_results,
+            "combined_results": combined_results,
+        }
+        
+        _structured_logger.info(
+            "hybrid_search_async_completed",
             vector_count=len(vector_results),
             graph_count=len(graph_results),
             combined_count=len(combined_results),
@@ -256,6 +344,23 @@ class DRIFTSearch:
             return self.local_search(query)
         else:
             return self.hybrid_search(query)
+
+    @track_process("retrieval.search_async")
+    async def search_async(self, query: str, strategy: Optional[str] = None) -> Dict[str, Any]:
+        """执行DRIFT搜索 - 异步版本"""
+        if strategy:
+            search_strategy = strategy
+        else:
+            search_strategy = self._classify_query_intent(query)
+        
+        logger.info(f"Async Query: '{query}', Strategy: {search_strategy}")
+        
+        if search_strategy == "global":
+            return self.global_search(query)
+        elif search_strategy == "local":
+            return await self.local_search_async(query)
+        else:
+            return await self.hybrid_search_async(query)
 
     def explain_strategy(self, query: str) -> Dict[str, Any]:
         """解释为什么选择特定的检索策略"""

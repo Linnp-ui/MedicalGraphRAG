@@ -43,12 +43,13 @@ class Neo4jClient:
                     self.settings.neo4j_password,
                 ),
                 max_connection_lifetime=1800,
-                max_connection_pool_size=100,
-                connection_acquisition_timeout=30,
+                max_connection_pool_size=200,
+                connection_acquisition_timeout=60,
                 connection_timeout=30,
                 max_transaction_retry_time=30,
+                keep_alive=True,
             )
-            logger.info(f"Neo4j driver created: {self.settings.neo4j_uri}")
+            logger.info(f"Neo4j driver created: {self.settings.neo4j_uri}, pool_size=200")
         return self._driver
 
     def _get_async_driver(self) -> AsyncDriver:
@@ -61,12 +62,13 @@ class Neo4jClient:
                     self.settings.neo4j_password,
                 ),
                 max_connection_lifetime=1800,
-                max_connection_pool_size=100,
-                connection_acquisition_timeout=30,
+                max_connection_pool_size=200,
+                connection_acquisition_timeout=60,
                 connection_timeout=30,
                 max_transaction_retry_time=30,
+                keep_alive=True,
             )
-            logger.info(f"Async Neo4j driver created: {self.settings.neo4j_uri}")
+            logger.info(f"Async Neo4j driver created: {self.settings.neo4j_uri}, pool_size=200")
         return self._async_driver
 
     @contextmanager

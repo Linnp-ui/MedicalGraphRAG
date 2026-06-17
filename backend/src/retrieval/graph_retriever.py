@@ -86,6 +86,37 @@ class GraphRetriever:
 
         return client.execute_query(query, params)
 
+    async def find_entities_async(
+        self,
+        entity_name: Optional[str] = None,
+        entity_type: Optional[str] = None,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """Find entities in the graph (async)"""
+        client = self._get_neo4j_client()
+
+        query = "MATCH (e:Entity)"
+        conditions = []
+        params: Dict[str, Any] = {"limit": limit}
+
+        if entity_name:
+            conditions.append("e.name CONTAINS $entity_name")
+            params["entity_name"] = entity_name
+
+        if entity_type:
+            conditions.append("e.type = $entity_type")
+            params["entity_type"] = entity_type
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+
+        query += """
+        RETURN e.name as name, e.type as type, e.properties as properties
+        LIMIT $limit
+        """
+
+        return await client.execute_query_async(query, params)
+
     def _get_embedding_client(self) -> EmbeddingClient:
         return get_embedding_client()
 
@@ -120,6 +151,36 @@ class GraphRetriever:
             logger.warning(f"Entity embedding search failed: {e}, falling back to name search")
             return self.find_entities(entity_name=query, limit=limit)
 
+    async def find_entities_by_embedding_async(
+        self,
+        query: str,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """Find entities using embedding similarity (async)"""
+        client = self._get_neo4j_client()
+
+        try:
+            embedding = self._get_embedding_client().embed_text(query)
+        except Exception as e:
+            logger.warning(f"Failed to embed query: {e}")
+            return await self.find_entities_async(entity_name=query, limit=limit)
+
+        cypher = """
+        MATCH (e:Entity)
+        WHERE e.embedding IS NOT NULL
+        WITH e, vector.similarity.cosine(e.embedding, $embedding) AS score
+        WHERE score > 0.7
+        RETURN e.name as name, e.type as type, e.properties as properties, score
+        ORDER BY score DESC
+        LIMIT $limit
+        """
+
+        try:
+            return await client.execute_query_async(cypher, {"embedding": embedding, "limit": limit})
+        except Exception as e:
+            logger.warning(f"Entity embedding search failed: {e}, falling back to name search")
+            return await self.find_entities_async(entity_name=query, limit=limit)
+
     @cached(get_query_cache)
     def find_relationships(
         self,
@@ -140,6 +201,26 @@ class GraphRetriever:
         """
 
         return client.execute_query(query, {"entity_name": entity_name, "limit": limit})
+
+    async def find_relationships_async(
+        self,
+        entity_name: str,
+        depth: int = 1,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """Find relationships for an entity (async)"""
+        client = self._get_neo4j_client()
+
+        query = f"""
+        MATCH (e:Entity {{name: $entity_name}})-[r*1..{depth}]-(related)
+        RETURN e.name as source,
+               type(r[0]) as relationship_type,
+               related.name as target,
+               related.type as target_type
+        LIMIT $limit
+        """
+
+        return await client.execute_query_async(query, {"entity_name": entity_name, "limit": limit})
 
     @cached(get_query_cache)
     def find_paths(

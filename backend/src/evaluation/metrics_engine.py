@@ -83,15 +83,19 @@ class MetricsEngine:
 
     def semantic_similarity(self, prediction: str, reference: str) -> float:
         try:
-            import sentence_transformers
-            # 禁用语义相似度，避免网络连接问题
-            pass
-        except ImportError:
-            pass
-        return self.f1_score(prediction, reference)
+            from sentence_transformers import SentenceTransformer
+            model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+            emb_pred = model.encode(prediction, normalize_embeddings=True)
+            emb_ref = model.encode(reference, normalize_embeddings=True)
+            import numpy as np
+            sim = float(np.dot(emb_pred, emb_ref))
+            return max(0.0, min(1.0, sim))
+        except Exception:
+            return self.f1_score(prediction, reference)
 
     def calculate_all(self, prediction: str, reference: str, keywords: List[str] = None) -> Dict[str, float]:
         keywords = keywords or []
+        ss = self.semantic_similarity(prediction, reference)
         return {
             'exact_match': self.exact_match(prediction, reference),
             'f1': self.f1_score(prediction, reference),
@@ -100,7 +104,7 @@ class MetricsEngine:
             'rouge_2': self.rouge_2(prediction, reference),
             'rouge_l': self.rouge_l(prediction, reference),
             'keyword_matching': self.keyword_matching(prediction, keywords),
-            'semantic_similarity': self.semantic_similarity(prediction, reference),
+            'semantic_similarity': ss,
         }
 
     def _tokenize(self, text: str) -> List[str]:

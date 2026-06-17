@@ -6,6 +6,7 @@ from loguru import logger
 from .state import GraphState
 from .nodes import (
     retrieve_drift,
+    aretrieve_drift,
     generate_answer,
     agenerate_answer,
     handle_error,
@@ -43,7 +44,7 @@ def create_workflow() -> StateGraph:
 def create_async_workflow() -> StateGraph:
     workflow = StateGraph(GraphState)
 
-    workflow.add_node("drift_retrieval", retrieve_drift)
+    workflow.add_node("drift_retrieval", aretrieve_drift)
     workflow.add_node("generate", agenerate_answer)
     workflow.add_node("error", handle_error)
 

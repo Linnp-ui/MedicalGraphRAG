@@ -10,6 +10,7 @@ from loguru import logger
 
 from .api.routes import router
 from .api.middleware import ErrorHandlingMiddleware, RequestTimingMiddleware
+from .api.middleware.concurrency import ConcurrencyMiddleware
 from .core.config import get_settings
 from .utils.logger import set_request_id, log_request
 
@@ -148,6 +149,7 @@ def create_app() -> FastAPI:
 
     app.add_middleware(ErrorHandlingMiddleware)
     app.add_middleware(RequestTimingMiddleware)
+    app.add_middleware(ConcurrencyMiddleware, max_concurrent=100, max_queue_size=500)
     app.add_middleware(RateLimitMiddleware, requests_per_minute=60)
     app.add_middleware(RequestIDMiddleware)
 
@@ -168,4 +170,10 @@ if __name__ == "__main__":
         host=settings.app_host,
         port=settings.app_port,
         reload=settings.debug,
+        workers=4,
+        loop="uvloop",
+        http="httptools",
+        limit_concurrency=1000,
+        limit_max_requests=10000,
+        timeout_keep_alive=30,
     )

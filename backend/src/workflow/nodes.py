@@ -69,6 +69,69 @@ def retrieve_drift(state: GraphState) -> GraphState:
     return state
 
 
+async def aretrieve_drift(state: GraphState) -> GraphState:
+    """Async version of DRIFT retrieval using non-blocking calls"""
+    logger.info("=== DRIFT Retrieval (Async) ===")
+    question = state["question"]
+
+    drift_searcher = DRIFTSearch()
+    results = await drift_searcher.search_async(question)
+
+    search_type = results.get("search_type", "unknown")
+    state["routing"] = search_type
+
+    if search_type == "global":
+        global_summary = results.get("global_summary", "")
+        community_summaries = results.get("community_summaries", {})
+        
+        context_parts = []
+        if global_summary:
+            context_parts.append(f"全局摘要: {global_summary}")
+        for comm_id, summary in community_summaries.items():
+            context_parts.append(f"社区{comm_id}摘要: {summary}")
+        
+        state["context"] = "\n\n".join(context_parts)
+        state["documents"] = []
+        state["graph_result"] = []
+        
+    elif search_type == "local":
+        local_results = results.get("results", [])
+        
+        documents = []
+        graph_result = []
+        
+        for item in local_results:
+            entity_name = item.get("entity")
+            entity_type = item.get("type")
+            summary = item.get("summary", "")
+            relationships = item.get("relationships", [])
+            
+            if summary:
+                documents.append({
+                    "content": f"实体【{entity_name}】({entity_type}): {summary}",
+                    "entity": entity_name,
+                    "score": item.get("score", 1.0)
+                })
+            
+            for rel in relationships:
+                graph_result.append({
+                    "source": entity_name,
+                    "relationship": rel.get("relationship", ""),
+                    "target": rel.get("target", "")
+                })
+        
+        state["documents"] = documents
+        state["graph_result"] = graph_result
+        
+    elif search_type == "hybrid":
+        state["documents"] = results.get("combined_results", [])
+        state["graph_result"] = results.get("graph_results", [])
+
+    logger.info(f"DRIFT search ({search_type}) returned {len(state['documents'])} document results")
+
+    return state
+
+
 async def agenerate_answer(state: GraphState) -> GraphState:
     """Async version of generate_answer using non-blocking LLM calls"""
     logger.info("=== Generate Answer (Async) ===")

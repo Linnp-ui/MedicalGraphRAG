@@ -8,6 +8,9 @@ from .benchmark_dataset import BenchmarkDataset, MedicalBenchmarkLoader
 from .metrics_engine import MetricsEngine
 from .llm_judge import LLMJudge
 from .threshold_checker import ThresholdChecker, ThresholdConfig
+from .medical_golden_set import MedicalGoldenCase, MEDICAL_GOLDEN_CASES
+from .ragas_evaluator import RagasEvaluator, RagasScore
+from .generated_loader import load_generated_dataset, load_generated_golden_set
 
 
 @dataclass
@@ -45,12 +48,17 @@ class OfflineEvaluator:
         self.threshold_checker = ThresholdChecker(threshold_config)
         self.llm_judge = LLMJudge()
         self.results: List[EvaluationResult] = []
+        self.ragas_scores: List[RagasScore] = []
 
     def load_dataset(self, dataset: BenchmarkDataset = None):
         if dataset is not None:
             self.dataset = dataset
         else:
             self.dataset = MedicalBenchmarkLoader.load_medical_benchmark()
+
+    def load_generated_dataset(self, filepath: str = None):
+        """加载从知识库生成的黄金评估集"""
+        self.dataset = load_generated_dataset(filepath)
 
     def evaluate_item(self, item) -> EvaluationResult:
         start_time = time.time()
@@ -142,6 +150,22 @@ class OfflineEvaluator:
 
         return self._generate_report(use_llm_judge)
 
+    def run_ragas_evaluation(self) -> List[RagasScore]:
+        print(f"\n开始RAGAS黄金数据集评估 - {len(MEDICAL_GOLDEN_CASES)} 个高危病例")
+        ragas = RagasEvaluator()
+        scores = []
+        for i, case in enumerate(MEDICAL_GOLDEN_CASES, 1):
+            print(f"  [{i}/{len(MEDICAL_GOLDEN_CASES)}] [{case.safety_category}] {case.question[:30]}...")
+            try:
+                model_answer = self._get_model_answer(case.question)
+                score = ragas.evaluate_case(case, model_answer)
+                scores.append(score)
+            except Exception as e:
+                print(f"     ❌ 错误: {e}")
+                scores.append(RagasScore())
+        self.ragas_scores = scores
+        return scores
+
     def _generate_report(self, use_llm_judge: bool) -> EvaluationReport:
         successful_results = [r for r in self.results if not r.error_occurred]
         
@@ -160,9 +184,10 @@ class OfflineEvaluator:
             )
 
         overall_metrics = {}
-        metric_names = ['exact_match', 'f1', 'bleu', 'rouge_1', 'rouge_2', 'rouge_l', 'keyword_matching', 'semantic_similarity']
+        primary_metrics = ['exact_match', 'f1', 'keyword_matching', 'semantic_similarity']
+        secondary_metrics = ['bleu', 'rouge_1', 'rouge_2', 'rouge_l']
         
-        for metric_name in metric_names:
+        for metric_name in primary_metrics + secondary_metrics:
             values = [r.metrics.get(metric_name, 0) for r in successful_results]
             overall_metrics[metric_name] = sum(values) / len(values)
 
@@ -170,7 +195,7 @@ class OfflineEvaluator:
         total_expected_entities = sum(r.expected_entities for r in successful_results)
         total_found_entities = sum(r.entities_found for r in successful_results)
         entity_recall = total_found_entities / total_expected_entities if total_expected_entities > 0 else 0
-        answer_relevance = overall_metrics.get('keyword_matching', 0)
+        answer_relevance = overall_metrics.get('semantic_similarity', 0)
         
         overall_metrics.update({
             'intent_accuracy': intent_accuracy,
@@ -188,7 +213,7 @@ class OfflineEvaluator:
             
             if cat_success:
                 cat_metrics = {}
-                for metric_name in metric_names:
+                for metric_name in primary_metrics + secondary_metrics:
                     values = [r.metrics.get(metric_name, 0) for r in cat_success]
                     cat_metrics[metric_name] = sum(values) / len(values)
                 
@@ -200,7 +225,7 @@ class OfflineEvaluator:
                 cat_metrics.update({
                     'intent_accuracy': cat_intent_acc,
                     'entity_recall': cat_entity_recall,
-                    'overall_score': (cat_intent_acc + cat_entity_recall + cat_metrics.get('keyword_matching', 0)) / 3
+                    'overall_score': (cat_intent_acc + cat_entity_recall + cat_metrics.get('semantic_similarity', 0)) / 3
                 })
                 category_metrics[category] = cat_metrics
 
@@ -247,9 +272,13 @@ class OfflineEvaluator:
         
         print("\n【NLP指标】")
         print(f"  F1分数: {report.overall_metrics.get('f1', 0) * 100:.1f}%")
-        print(f"  BLEU分数: {report.overall_metrics.get('bleu', 0) * 100:.1f}%")
-        print(f"  ROUGE-L: {report.overall_metrics.get('rouge_l', 0) * 100:.1f}%")
         print(f"  语义相似度: {report.overall_metrics.get('semantic_similarity', 0) * 100:.1f}%")
+        print(f"  关键词匹配: {report.overall_metrics.get('keyword_matching', 0) * 100:.1f}%")
+
+        bleu = report.overall_metrics.get('bleu', 0)
+        rouge_l = report.overall_metrics.get('rouge_l', 0)
+        if bleu > 0 or rouge_l > 0:
+            print(f"  BLEU: {bleu * 100:.1f}% | ROUGE-L: {rouge_l * 100:.1f}%")
         
         print("\n【性能指标】")
         print(f"  平均响应时间: {report.execution_summary.get('avg_response_time', 0):.2f}s")
@@ -266,9 +295,21 @@ class OfflineEvaluator:
         print("\n【阈值检查】")
         if report.threshold_result:
             print(f"  结果: {'通过' if report.threshold_result.passed else '未通过'}")
-            for name, actual, threshold, passed in report.threshold_result.details["checks"]:
-                symbol = "✅" if passed else "❌"
-                print(f"    {symbol} {name}: {actual:.2% if isinstance(actual, float) else actual}")
+            checks = report.threshold_result.details.get("checks", [])
+            for name, actual, threshold, passed in checks:
+                symbol = "Y" if passed else "N"
+                formatted = f"{actual:.2%}" if isinstance(actual, float) else str(actual)
+                print(f"    {symbol} {name}: {formatted}")
+
+        if self.ragas_scores:
+            print("\n【RAGAS 安全评估】")
+            agg = RagasEvaluator().aggregate_scores(self.ragas_scores)
+            print(f"  忠实度(Faithfulness):       {agg.get('avg_faithfulness', 0) * 100:.1f}%")
+            print(f"  回答相关性(Answer Relevancy): {agg.get('avg_answer_relevancy', 0) * 100:.1f}%")
+            print(f"  回答正确性(Answer Correctness): {agg.get('avg_answer_correctness', 0) * 100:.1f}%")
+            print(f"  医疗安全(Medical Safety):    {agg.get('avg_medical_safety', 0) * 100:.1f}%")
+            print(f"  RAGAS综合评分:               {agg.get('avg_ragas_overall', 0) * 100:.1f}%")
+            print(f"  安全通过率:                  {agg.get('safety_pass_rate', 0) * 100:.1f}%")
 
         print("\n" + "=" * 70)
 

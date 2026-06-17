@@ -3,8 +3,8 @@ import json
 import time
 import threading
 from abc import ABC, abstractmethod
-from collections import OrderedDict
-from typing import Any, Callable, Dict, Optional, Tuple
+from collections import OrderedDict, defaultdict
+from typing import Any, Callable, Dict, Optional, Set, Tuple
 from functools import wraps
 
 from loguru import logger
@@ -20,11 +20,15 @@ class CacheBackend(ABC):
         pass
 
     @abstractmethod
-    def set(self, key: str, value: Any, ttl: int = 3600):
+    def set(self, key: str, value: Any, ttl: int = 3600, tags: Optional[list[str]] = None):
         pass
 
     @abstractmethod
     def clear(self):
+        pass
+
+    def invalidate_by_tag(self, tag: str):
+        """Invalidate all cache entries with the given tag"""
         pass
 
 
@@ -35,6 +39,7 @@ class LRUCache(CacheBackend):
         self.cache: OrderedDict[str, Tuple[Any, float]] = OrderedDict()
         self.max_size = max_size
         self._lock = threading.Lock()
+        self._tag_index: Dict[str, Set[str]] = defaultdict(set)
 
     def get(self, key: str) -> Optional[Any]:
         """Get value from cache if not expired"""
@@ -49,8 +54,8 @@ class LRUCache(CacheBackend):
                 return value
             return None
 
-    def set(self, key: str, value: Any, ttl: int = 3600):
-        """Set value in cache with TTL"""
+    def set(self, key: str, value: Any, ttl: int = 3600, tags: Optional[list[str]] = None):
+        """Set value in cache with TTL and optional tag indexing"""
         with self._lock:
             if key in self.cache:
                 self.cache.move_to_end(key)
@@ -58,13 +63,29 @@ class LRUCache(CacheBackend):
             expires_at = time.time() + ttl
             self.cache[key] = (value, expires_at)
 
+            if tags:
+                for tag in tags:
+                    self._tag_index[tag].add(key)
+
             if len(self.cache) > self.max_size:
-                self.cache.popitem(last=False)
+                evicted_key, _ = self.cache.popitem(last=False)
+                for tag_set in self._tag_index.values():
+                    tag_set.discard(evicted_key)
+
+    def invalidate_by_tag(self, tag: str):
+        """Invalidate all cache entries with the given tag"""
+        with self._lock:
+            keys = self._tag_index.pop(tag, set())
+            for key in keys:
+                self.cache.pop(key, None)
+            if keys:
+                logger.debug(f"LRU cache invalidated {len(keys)} entries for tag: {tag}")
 
     def clear(self):
         """Clear all cache"""
         with self._lock:
             self.cache.clear()
+            self._tag_index.clear()
 
     def __contains__(self, key: str) -> bool:
         with self._lock:
@@ -82,7 +103,7 @@ class LRUCache(CacheBackend):
 
 
 class RedisCache(CacheBackend):
-    """Redis-based cache backend with serialization"""
+    """Redis-based cache backend with serialization and tag index"""
 
     def __init__(
         self,
@@ -120,6 +141,9 @@ class RedisCache(CacheBackend):
     def _make_key(self, key: str) -> str:
         return f"{self.prefix}:{key}"
 
+    def _make_tag_key(self, tag: str) -> str:
+        return f"{self.prefix}:tag:{tag}"
+
     def get(self, key: str) -> Optional[Any]:
         if not self._available:
             return None
@@ -132,14 +156,33 @@ class RedisCache(CacheBackend):
             logger.warning(f"Redis get failed: {e}")
             return None
 
-    def set(self, key: str, value: Any, ttl: int = 3600):
+    def set(self, key: str, value: Any, ttl: int = 3600, tags: Optional[list[str]] = None):
         if not self._available:
             return
         try:
             serialized = json.dumps(value, ensure_ascii=False, default=str)
-            self._client.setex(self._make_key(key), ttl, serialized)
+            pipe = self._client.pipeline()
+            pipe.setex(self._make_key(key), ttl, serialized)
+            if tags:
+                for tag in tags:
+                    pipe.sadd(self._make_tag_key(tag), key)
+            pipe.execute()
         except Exception as e:
             logger.warning(f"Redis set failed: {e}")
+
+    def invalidate_by_tag(self, tag: str):
+        if not self._available:
+            return
+        try:
+            tag_key = self._make_tag_key(tag)
+            keys = self._client.smembers(tag_key)
+            if keys:
+                full_keys = [self._make_key(k) for k in keys]
+                full_keys.append(tag_key)
+                self._client.delete(*full_keys)
+                logger.info(f"Redis invalidated {len(keys)} entries for tag: {tag}")
+        except Exception as e:
+            logger.warning(f"Redis invalidate_by_tag failed: {e}")
 
     def clear(self):
         if not self._available:
@@ -171,10 +214,15 @@ class CacheRouter:
                 return value
         return self._memory.get(key)
 
-    def set(self, key: str, value: Any, ttl: int = 3600):
-        self._memory.set(key, value, ttl)
+    def set(self, key: str, value: Any, ttl: int = 3600, tags: Optional[list[str]] = None):
+        self._memory.set(key, value, ttl, tags=tags)
         if self._redis._available:
-            self._redis.set(key, value, ttl)
+            self._redis.set(key, value, ttl, tags=tags)
+
+    def invalidate_by_tag(self, tag: str):
+        self._memory.invalidate_by_tag(tag)
+        if self._redis._available:
+            self._redis.invalidate_by_tag(tag)
 
     def clear(self):
         self._memory.clear()
@@ -219,19 +267,24 @@ class QueryCache:
         key = self._generate_key(query, params)
         return self.cache.get(key)
 
-    def set(self, query: str, params: Optional[dict], value: Any):
-        """Cache a result"""
+    def set(self, query: str, params: Optional[dict], value: Any, tags: Optional[list[str]] = None):
+        """Cache a result with optional tag indexing"""
         key = self._generate_key(query, params)
-        self.cache.set(key, value, ttl=self.ttl)
+        self.cache.set(key, value, ttl=self.ttl, tags=tags)
         logger.debug(f"Cached result for query key: {key}")
 
     def raw_get(self, key: str) -> Optional[Any]:
         """Get cached result by pre-computed key"""
         return self.cache.get(key)
 
-    def raw_set(self, key: str, value: Any, ttl: Optional[int] = None):
-        """Cache a result by pre-computed key"""
-        self.cache.set(key, value, ttl=ttl or self.ttl)
+    def raw_set(self, key: str, value: Any, ttl: Optional[int] = None, tags: Optional[list[str]] = None):
+        """Cache a result by pre-computed key with optional tag indexing"""
+        self.cache.set(key, value, ttl=ttl or self.ttl, tags=tags)
+
+    def invalidate_by_tag(self, tag: str):
+        """Invalidate all cached results with the given tag"""
+        self.cache.invalidate_by_tag(tag)
+        logger.info(f"Query cache invalidated for tag: {tag}")
 
     def clear(self):
         """Clear all cached results"""

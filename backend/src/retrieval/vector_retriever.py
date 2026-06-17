@@ -59,6 +59,92 @@ class VectorRetriever:
                 logger.warning(f"Cosine scan failed ({e2}), falling back to text search")
                 return self._fallback_text_search(query, top_k, filters)
 
+    async def search_async(
+        self,
+        query: str,
+        top_k: int = 5,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Search for similar chunks using the vector index (async)"""
+        client = self._get_neo4j_client()
+
+        # Get query embedding
+        embedding = self._get_embedding_client().embed_text(query)
+
+        # Use Neo4j 5.x vector index query API for best performance
+        try:
+            results = await self._vector_index_search_async(client, embedding, top_k, filters)
+            logger.info(f"Vector index search returned {len(results)} results")
+            return results
+        except Exception as e:
+            logger.warning(f"Vector index search failed ({e}), falling back to cosine scan")
+            try:
+                return await self._cosine_scan_search_async(client, embedding, top_k, filters)
+            except Exception as e2:
+                logger.warning(f"Cosine scan failed ({e2}), falling back to text search")
+                return self._fallback_text_search(query, top_k, filters)
+
+    async def _vector_index_search_async(
+        self,
+        client: Neo4jClient,
+        embedding: List[float],
+        top_k: int,
+        filters: Optional[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Use Neo4j vector index for ANN search (async)"""
+        base_query = """
+        CALL db.index.vector.queryNodes($index_name, $top_k, $embedding)
+        YIELD node AS c, score AS similarity
+        """
+        params: Dict[str, Any] = {
+            "index_name": self.VECTOR_INDEX_NAME,
+            "top_k": top_k,
+            "embedding": embedding,
+        }
+
+        if filters:
+            filter_parts = [f"c.{k} = ${k}" for k in filters.keys()]
+            base_query += "WHERE " + " AND ".join(filter_parts) + "\n"
+            params.update(filters)
+
+        base_query += """
+        RETURN c.id AS chunk_id,
+               c.content AS content,
+               c.document_id AS document_id,
+               c.index AS index,
+               similarity
+        """
+        return await client.execute_query_async(base_query, params)
+
+    async def _cosine_scan_search_async(
+        self,
+        client: Neo4jClient,
+        embedding: List[float],
+        top_k: int,
+        filters: Optional[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Full-scan cosine similarity (async fallback)"""
+        filter_clause = ""
+        params: Dict[str, Any] = {"embedding": embedding, "top_k": top_k}
+        if filters:
+            filter_parts = [f"c.{k} = ${k}" for k in filters.keys()]
+            filter_clause = "AND " + " AND ".join(filter_parts)
+            params.update(filters)
+
+        query_cypher = f"""
+        MATCH (c:Chunk)
+        WHERE c.embedding IS NOT NULL {filter_clause}
+        WITH c, vector.similarity.cosine(c.embedding, $embedding) AS similarity
+        ORDER BY similarity DESC
+        LIMIT $top_k
+        RETURN c.id AS chunk_id,
+               c.content AS content,
+               c.document_id AS document_id,
+               c.index AS index,
+               similarity
+        """
+        return await client.execute_query_async(query_cypher, params)
+
     def _vector_index_search(
         self,
         client: Neo4jClient,

@@ -280,3 +280,34 @@ class ErrorStatsResponse(BaseModel):
     errors_by_type: Dict[str, int]
     errors_by_source: Dict[str, int]
     errors_by_severity: Dict[str, int]
+
+
+class FeedbackRequest(BaseModel):
+    question: str = Field(..., description="User question", min_length=1, max_length=2000)
+    answer: str = Field(..., description="System answer")
+    rating: int = Field(..., ge=1, le=5, description="Rating 1-5")
+    corrected_answer: Optional[str] = Field(None, description="User corrected answer")
+    session_id: Optional[str] = Field(None, description="Session identifier")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="A/B test metadata")
+
+
+class FeedbackResponse(BaseModel):
+    feedback_id: str
+    status: str
+
+
+class ABTestConfig(BaseModel):
+    variant: str = Field(..., description="A or B")
+    alpha: float = Field(default=0.5, ge=0.0, le=1.0)
+    enable_cross_encoder: bool = Field(default=True)
+    enable_dynamic_alpha: bool = Field(default=True)
+    enable_query_expansion: bool = Field(default=False)
+
+
+class ABTestStats(BaseModel):
+    total_feedback: int
+    avg_rating_a: float
+    avg_rating_b: float
+    count_a: int
+    count_b: int
+    improvement_pct: Optional[float] = None

@@ -14,9 +14,9 @@ class CircuitState(Enum):
 
 @dataclass
 class CircuitBreakerConfig:
-    failure_threshold: int = 5
-    recovery_timeout: int = 30
-    half_open_max_calls: int = 3
+    failure_threshold: int = 20
+    recovery_timeout: int = 60
+    half_open_max_calls: int = 10
 
 
 class CircuitBreaker:

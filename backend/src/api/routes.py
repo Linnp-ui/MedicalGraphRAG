@@ -1,7 +1,7 @@
 import os
 import time
 import threading
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
 from loguru import logger
 import tempfile
@@ -33,9 +33,13 @@ from .schemas import (
     ErrorLogResponse,
     ErrorLogListResponse,
     ErrorStatsResponse,
+    FeedbackRequest,
+    FeedbackResponse,
+    ABTestStats,
 )
 from ..core.neo4j_client import get_neo4j_client
 from ..core.config import get_settings
+from ..core.medical_schema import MedicalEntityType
 from ..utils.logger import get_request_id
 
 router = APIRouter()
@@ -94,6 +98,21 @@ def _get_search_cache():
 def _get_community_detector():
     from ..core.community_detector import get_community_detector
     return get_community_detector()
+
+
+def _invalidate_cache_by_entity_types():
+    """Invalidate graph data and search caches for all medical entity types"""
+    try:
+        from ..core.cache import get_graph_data_cache, get_search_cache
+        graph_cache = get_graph_data_cache()
+        search_cache = get_search_cache()
+        all_tags = [e.value for e in MedicalEntityType] + ["all_entities"]
+        for tag in all_tags:
+            graph_cache.invalidate_by_tag(tag)
+            search_cache.invalidate_by_tag(tag)
+        logger.info(f"Cache invalidated for {len(all_tags)} tags")
+    except Exception as e:
+        logger.warning(f"Cache invalidation failed: {e}")
 
 
 def _get_summary_generator():
@@ -365,6 +384,7 @@ async def ingest_documents(request: IngestRequest):
             get_neo4j_client().invalidate_schema_cache()
         except Exception:
             pass
+        _invalidate_cache_by_entity_types()
 
 
 @router.post("/ingest/upload", response_model=IngestResponse)
@@ -414,6 +434,7 @@ async def upload_and_ingest(
             get_neo4j_client().invalidate_schema_cache()
         except Exception:
             pass
+        _invalidate_cache_by_entity_types()
 
 
 @router.post("/retrieval/vector")
@@ -481,7 +502,8 @@ async def get_graph_data(
             limit=limit,
             offset=offset,
         )
-        cache.raw_set(cache_key, data, ttl=300)
+        tags = [node_label] if node_label else ["all_entities"]
+        cache.raw_set(cache_key, data, ttl=300, tags=tags)
         return GraphDataResponse(**data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -540,7 +562,8 @@ async def search_nodes(
             "results": results,
             "total": len(results),
         }
-        cache.raw_set(cache_key, response_data, ttl=600)
+        tags = [node_label] if node_label else ["all_entities"]
+        cache.raw_set(cache_key, response_data, ttl=600, tags=tags)
         return GraphSearchResponse(**response_data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1317,6 +1340,73 @@ async def get_active_processes():
     active = monitor.get_active_processes()
     
     return {"active_processes": active, "count": len(active)}
+
+
+_feedback_store: List[Dict[str, Any]] = []
+_feedback_lock = threading.Lock()
+
+
+@router.post("/feedback", response_model=FeedbackResponse)
+async def submit_feedback(request: FeedbackRequest):
+    import uuid
+    feedback_id = str(uuid.uuid4())
+    entry = {
+        "feedback_id": feedback_id,
+        "question": request.question,
+        "answer": request.answer,
+        "rating": request.rating,
+        "corrected_answer": request.corrected_answer,
+        "session_id": request.session_id,
+        "metadata": request.metadata,
+        "timestamp": time.time(),
+    }
+    with _feedback_lock:
+        _feedback_store.append(entry)
+        if len(_feedback_store) > 10000:
+            _feedback_store.pop(0)
+    logger.info(f"Feedback recorded: {feedback_id}, rating={request.rating}")
+    return FeedbackResponse(feedback_id=feedback_id, status="recorded")
+
+
+@router.get("/feedback/stats")
+async def get_feedback_stats():
+    with _feedback_lock:
+        if not _feedback_store:
+            return {"total": 0, "avg_rating": 0.0, "count": 0}
+
+        ratings = [f["rating"] for f in _feedback_store]
+        avg_rating = sum(ratings) / len(ratings)
+        distribution = {str(i): ratings.count(i) for i in range(1, 6)}
+
+        return {
+            "total": len(_feedback_store),
+            "avg_rating": round(avg_rating, 2),
+            "distribution": distribution,
+        }
+
+
+@router.get("/feedback/ab-test", response_model=ABTestStats)
+async def get_ab_test_stats():
+    with _feedback_lock:
+        if not _feedback_store:
+            return ABTestStats(total_feedback=0, avg_rating_a=0, avg_rating_b=0, count_a=0, count_b=0)
+
+        group_a = [f for f in _feedback_store if f.get("metadata", {}).get("variant", "A") == "A"]
+        group_b = [f for f in _feedback_store if f.get("metadata", {}).get("variant", "B") == "B"]
+
+        avg_a = sum(f["rating"] for f in group_a) / len(group_a) if group_a else 0
+        avg_b = sum(f["rating"] for f in group_b) / len(group_b) if group_b else 0
+
+        improvement = ((avg_b - avg_a) / avg_a * 100) if avg_a > 0 else None
+
+        return ABTestStats(
+            total_feedback=len(_feedback_store),
+            avg_rating_a=round(avg_a, 2),
+            avg_rating_b=round(avg_b, 2),
+            count_a=len(group_a),
+            count_b=len(group_b),
+            improvement_pct=round(improvement, 2) if improvement is not None else None,
+        )
 
 
 @router.post("/monitoring/process/clear")

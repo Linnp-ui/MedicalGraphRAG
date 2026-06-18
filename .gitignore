@@ -7,6 +7,10 @@ venv/
 .env
 .env.local
 .env.*.local
+key.txt
+*_key*
+*_secret*
+credentials*
 
 # IDE 相关
 .vscode/
@@ -28,6 +32,14 @@ build/
 .pytest_cache/
 .coverage
 coverage.xml
+test_results/
+**/test_results/
+golden_set/pipeline_log.json
+
+# 评估输出
+**/eval_output*
+**/golden_eval_*.json
+**/ragas_eval_*.json
 
 # Python 相关
 __pycache__/
@@ -44,3 +56,11 @@ data/output/
 # 临时文件
 tmp/
 temp/
+current_page.txt
+givemeoc_*
+test_import.py
+test_out.txt
+
+# Node.js
+node_modules/
+package-lock.json

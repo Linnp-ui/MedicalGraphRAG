@@ -23,6 +23,8 @@ class Settings(BaseSettings):
 
     embedding_model: str = Field(default="text-embedding-3-small", alias="EMBEDDING_MODEL")
     embedding_dimensions: int = Field(default=1536, alias="EMBEDDING_DIMENSIONS")
+    embedding_api_key: str = Field(default="", alias="EMBEDDING_API_KEY")
+    embedding_base_url: str = Field(default="", alias="EMBEDDING_BASE_URL")
     
     llm_provider: str = Field(default="dashscope", alias="LLM_PROVIDER")
     vector_provider: str = Field(default="neo4j", alias="VECTOR_PROVIDER")

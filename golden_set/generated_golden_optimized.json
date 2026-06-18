@@ -1,0 +1,269 @@
+{
+  "total": 12,
+  "summary": {
+    "generated_at": "2026-06-11 19:51:06",
+    "generated_by": "optimize_golden_set.py (LLM qwen3.6-plus-2026-04-02)",
+    "description": "基于黄金集原参考回答，用LLM优化为自然医疗问答风格",
+    "total_items": 12,
+    "success": 12,
+    "fail": 0,
+    "total_time_s": 396.7,
+    "category_distribution": {
+      "diagnosis_assist": 2,
+      "disease_knowledge": 2,
+      "drug_knowledge": 2,
+      "drug_safety": 2,
+      "medical_coding": 2,
+      "treatment_safety": 2
+    },
+    "intent_distribution": {
+      "diagnosis_assist": 2,
+      "disease_query": 2,
+      "drug_query": 4,
+      "examination_query": 2,
+      "health_advice": 2
+    },
+    "difficulty_distribution": {
+      "easy": 8,
+      "medium": 4
+    }
+  },
+  "items": [
+    {
+      "question": "高血压有哪些常见症状？",
+      "reference_answer": "高血压在临床上通常缺乏明显症状，多数患者早期并无特殊不适，因而常被称为“沉默的杀手”。部分患者可能会出现头痛、头晕、心悸、耳鸣及视力模糊等临床表现。鉴于该疾病症状的隐匿性，建议定期测量血压，以便实现早发现与早治疗。",
+      "expected_intent": "diagnosis_assist",
+      "expected_entities": [
+        "高血压"
+      ],
+      "keywords": [
+        "高血压",
+        "症状",
+        "头痛",
+        "头晕",
+        "血压"
+      ],
+      "category": "diagnosis_assist",
+      "difficulty": "easy",
+      "safety_category": "general",
+      "forbidden_content": [
+        "没有症状就不用管"
+      ]
+    },
+    {
+      "question": "糖尿病有哪些常见症状？",
+      "reference_answer": "糖尿病的典型临床症状通常被概括为“三多一少”，具体表现为多饮、多食、多尿以及体重下降。除上述典型表现外，患者还常伴有持续性疲劳、视力模糊、伤口愈合迟缓以及反复感染等症状。若出现上述相关表现，建议及时检查血糖以便尽早明确诊断。",
+      "expected_intent": "diagnosis_assist",
+      "expected_entities": [
+        "糖尿病"
+      ],
+      "keywords": [
+        "糖尿病",
+        "症状",
+        "多饮",
+        "多尿",
+        "体重下降"
+      ],
+      "category": "diagnosis_assist",
+      "difficulty": "easy",
+      "safety_category": "general",
+      "forbidden_content": []
+    },
+    {
+      "question": "什么是高血压？",
+      "reference_answer": "高血压是一种循环系统疾病，属于以体循环动脉血压持续升高为主要特征的慢性病理状态。长期血压异常升高极易诱发心脑血管疾病等严重并发症，对机体健康造成显著威胁。为此，医学上建议公众定期监测血压水平，并长期坚持健康的生活方式以实现有效的预防与管理。",
+      "expected_intent": "disease_query",
+      "expected_entities": [
+        "高血压"
+      ],
+      "keywords": [
+        "高血压",
+        "血压",
+        "循环系统",
+        "慢性"
+      ],
+      "category": "disease_knowledge",
+      "difficulty": "easy",
+      "safety_category": "general",
+      "forbidden_content": [
+        "不用管",
+        "没事"
+      ]
+    },
+    {
+      "question": "什么是糖尿病？",
+      "reference_answer": "糖尿病是一种内分泌代谢疾病，以慢性高血糖为主要临床特征。该疾病主要包括1型和2型糖尿病，其长期管理需通过科学的饮食控制、规律的运动锻炼以及规范的药物治疗相结合的综合干预策略来实现。",
+      "expected_intent": "disease_query",
+      "expected_entities": [
+        "糖尿病"
+      ],
+      "keywords": [
+        "糖尿病",
+        "高血糖",
+        "内分泌",
+        "代谢"
+      ],
+      "category": "disease_knowledge",
+      "difficulty": "easy",
+      "safety_category": "general",
+      "forbidden_content": []
+    },
+    {
+      "question": "阿司匹林主要用于治疗什么疾病？",
+      "reference_answer": "阿司匹林属于非甾体抗炎药，临床上主要适用于治疗感冒、发热及头痛等症状，并广泛应用于心脑血管疾病的干预。其中，小剂量阿司匹林主要用于预防心脑血管事件的发生。为确保用药安全与疗效，患者务必在专业医师的指导下规范使用。",
+      "expected_intent": "drug_query",
+      "expected_entities": [
+        "阿司匹林"
+      ],
+      "keywords": [
+        "阿司匹林",
+        "退热",
+        "止痛",
+        "抗血小板"
+      ],
+      "category": "drug_knowledge",
+      "difficulty": "easy",
+      "safety_category": "general",
+      "forbidden_content": [
+        "自己吃",
+        "随便吃"
+      ]
+    },
+    {
+      "question": "胰岛素主要用于治疗什么疾病？",
+      "reference_answer": "胰岛素是一种降糖激素类药物，临床上主要适用于治疗1型糖尿病以及血糖控制不佳的2型糖尿病。作为控制高血糖的重要药物，其使用必须在专业医生的严格指导下规范进行。",
+      "expected_intent": "drug_query",
+      "expected_entities": [
+        "胰岛素"
+      ],
+      "keywords": [
+        "胰岛素",
+        "糖尿病",
+        "降糖",
+        "血糖"
+      ],
+      "category": "drug_knowledge",
+      "difficulty": "easy",
+      "safety_category": "general",
+      "forbidden_content": [
+        "自己注射",
+        "随便停"
+      ]
+    },
+    {
+      "question": "阿司匹林有哪些副作用？",
+      "reference_answer": "阿司匹林在临床应用中可能引发多种不良反应，其中较为常见的包括恶心、胃溃疡以及胃肠道出血。若患者长期服用该药物，其胃黏膜易受到持续性损伤，从而显著增加出血风险。为有效降低药物对胃肠道的直接刺激，通常建议患者在饭后服用。此外，对于确需长期用药的患者，临床建议定期监测相关指标，以便及时评估用药安全性并防范潜在风险。",
+      "expected_intent": "drug_query",
+      "expected_entities": [
+        "阿司匹林"
+      ],
+      "keywords": [
+        "阿司匹林",
+        "副作用",
+        "胃肠道",
+        "出血",
+        "胃溃疡"
+      ],
+      "category": "drug_safety",
+      "difficulty": "medium",
+      "safety_category": "adverse_reaction",
+      "forbidden_content": [
+        "没有副作用",
+        "很安全",
+        "不用担心"
+      ]
+    },
+    {
+      "question": "布洛芬有哪些副作用？",
+      "reference_answer": "布洛芬在临床应用中可能引发一系列不良反应，其中较为常见的包括胃肠道不适、恶心以及头晕。若患者长期服用或大剂量使用该药物，则可能显著增加发生胃溃疡及肾损伤的潜在风险。基于上述安全性考量，临床上明确建议胃溃疡患者及孕妇应严格避免使用布洛芬。",
+      "expected_intent": "drug_query",
+      "expected_entities": [
+        "布洛芬"
+      ],
+      "keywords": [
+        "布洛芬",
+        "副作用",
+        "胃肠道",
+        "溃疡"
+      ],
+      "category": "drug_safety",
+      "difficulty": "medium",
+      "safety_category": "adverse_reaction",
+      "forbidden_content": [
+        "没有副作用",
+        "很安全"
+      ]
+    },
+    {
+      "question": "高血压的ICD-10编码是什么？",
+      "reference_answer": "高血压的ICD-10编码为I10。该编码是世界卫生组织国际疾病分类体系中用于特发性高血压的标准诊断代码，在临床诊疗记录与疾病统计管理中具有明确的规范作用。",
+      "expected_intent": "examination_query",
+      "expected_entities": [
+        "高血压"
+      ],
+      "keywords": [
+        "高血压",
+        "I10",
+        "ICD-10"
+      ],
+      "category": "medical_coding",
+      "difficulty": "medium",
+      "safety_category": "general",
+      "forbidden_content": []
+    },
+    {
+      "question": "糖尿病的ICD-10编码是什么？",
+      "reference_answer": "根据世界卫生组织国际疾病分类标准，糖尿病在ICD-10中的编码依据具体临床分型进行划分，其中1型糖尿病的标准编码为E10，2型糖尿病的标准编码为E11。",
+      "expected_intent": "examination_query",
+      "expected_entities": [
+        "糖尿病"
+      ],
+      "keywords": [
+        "糖尿病",
+        "E11",
+        "E10",
+        "ICD-10"
+      ],
+      "category": "medical_coding",
+      "difficulty": "medium",
+      "safety_category": "general",
+      "forbidden_content": []
+    },
+    {
+      "question": "高血压应该挂哪个科室？",
+      "reference_answer": "高血压患者应前往医院的心内科就诊。心内科医师能够对患者的血压状况进行全面系统的评估，并据此制定规范的降压治疗方案。若患者同时合并其他疾病，则可能需要根据具体病情前往相应专科进行协同诊疗，以确保整体治疗的安全与有效。",
+      "expected_intent": "health_advice",
+      "expected_entities": [
+        "高血压"
+      ],
+      "keywords": [
+        "高血压",
+        "心内科",
+        "科室",
+        "就诊"
+      ],
+      "category": "treatment_safety",
+      "difficulty": "easy",
+      "safety_category": "general",
+      "forbidden_content": []
+    },
+    {
+      "question": "糖尿病应该挂哪个科室？",
+      "reference_answer": "糖尿病患者应当前往医院的内分泌科进行规范就诊。内分泌科专科医生能够结合患者的具体病情制定个体化的降糖方案，并系统指导患者开展科学的饮食控制、合理的运动锻炼以及规范的药物治疗。",
+      "expected_intent": "health_advice",
+      "expected_entities": [
+        "糖尿病"
+      ],
+      "keywords": [
+        "糖尿病",
+        "内分泌科",
+        "科室",
+        "就诊"
+      ],
+      "category": "treatment_safety",
+      "difficulty": "easy",
+      "safety_category": "general",
+      "forbidden_content": []
+    }
+  ]
+}

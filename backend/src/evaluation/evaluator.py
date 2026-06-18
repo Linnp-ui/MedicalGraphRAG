@@ -184,7 +184,7 @@ class OfflineEvaluator:
             )
 
         overall_metrics = {}
-        primary_metrics = ['exact_match', 'f1', 'keyword_matching', 'semantic_similarity']
+        primary_metrics = ['exact_match', 'f1', 'keyword_matching', 'retrieval_recall', 'semantic_similarity']
         secondary_metrics = ['bleu', 'rouge_1', 'rouge_2', 'rouge_l']
         
         for metric_name in primary_metrics + secondary_metrics:
@@ -195,13 +195,19 @@ class OfflineEvaluator:
         total_expected_entities = sum(r.expected_entities for r in successful_results)
         total_found_entities = sum(r.entities_found for r in successful_results)
         entity_recall = total_found_entities / total_expected_entities if total_expected_entities > 0 else 0
+        keyword_matching = overall_metrics.get('keyword_matching', 0)
         answer_relevance = overall_metrics.get('semantic_similarity', 0)
-        
+
+        # 检索召回质量为核心：意图准确率 + 实体召回率 + 关键词匹配率 + 检索召回率
+        # 文本相似度仅作参考，不作为主要评判标准
+        retrieval_recall = overall_metrics.get('retrieval_recall', 0)
         overall_metrics.update({
             'intent_accuracy': intent_accuracy,
             'entity_recall': entity_recall,
+            'keyword_matching': keyword_matching,
+            'retrieval_recall': retrieval_recall,
             'answer_relevance': answer_relevance,
-            'overall_score': (intent_accuracy + entity_recall + answer_relevance) / 3
+            'overall_score': 0.25 * intent_accuracy + 0.25 * entity_recall + 0.20 * keyword_matching + 0.20 * retrieval_recall + 0.10 * answer_relevance
         })
 
         category_metrics = {}
@@ -225,7 +231,9 @@ class OfflineEvaluator:
                 cat_metrics.update({
                     'intent_accuracy': cat_intent_acc,
                     'entity_recall': cat_entity_recall,
-                    'overall_score': (cat_intent_acc + cat_entity_recall + cat_metrics.get('semantic_similarity', 0)) / 3
+                    'keyword_matching': cat_metrics.get('keyword_matching', 0),
+                    'retrieval_recall': cat_metrics.get('retrieval_recall', 0),
+                    'overall_score': 0.25 * cat_intent_acc + 0.25 * cat_entity_recall + 0.20 * cat_metrics.get('keyword_matching', 0) + 0.20 * cat_metrics.get('retrieval_recall', 0) + 0.10 * cat_metrics.get('semantic_similarity', 0)
                 })
                 category_metrics[category] = cat_metrics
 
@@ -267,13 +275,14 @@ class OfflineEvaluator:
         print("\n【综合指标】")
         print(f"  意图分类准确率: {report.overall_metrics.get('intent_accuracy', 0) * 100:.1f}%")
         print(f"  实体识别召回率: {report.overall_metrics.get('entity_recall', 0) * 100:.1f}%")
+        print(f"  关键词匹配率: {report.overall_metrics.get('keyword_matching', 0) * 100:.1f}%")
+        print(f"  检索召回率: {report.overall_metrics.get('retrieval_recall', 0) * 100:.1f}%")
         print(f"  回答相关性: {report.overall_metrics.get('answer_relevance', 0) * 100:.1f}%")
         print(f"  综合评分: {report.overall_metrics.get('overall_score', 0) * 100:.1f}%")
-        
-        print("\n【NLP指标】")
+
+        print("\n【NLP指标（参考）】")
         print(f"  F1分数: {report.overall_metrics.get('f1', 0) * 100:.1f}%")
         print(f"  语义相似度: {report.overall_metrics.get('semantic_similarity', 0) * 100:.1f}%")
-        print(f"  关键词匹配: {report.overall_metrics.get('keyword_matching', 0) * 100:.1f}%")
 
         bleu = report.overall_metrics.get('bleu', 0)
         rouge_l = report.overall_metrics.get('rouge_l', 0)

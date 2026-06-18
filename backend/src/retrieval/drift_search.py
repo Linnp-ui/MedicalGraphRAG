@@ -4,6 +4,7 @@ from loguru import logger
 
 from .vector_retriever import VectorRetriever
 from .graph_retriever import GraphRetriever
+from .query_expander import MedicalQueryExpander
 from ..core.community_detector import get_community_detector
 from ..core.summary_generator import get_summary_generator
 from ..core.cache import cached, get_query_cache
@@ -26,14 +27,17 @@ class DRIFTSearch:
         vector_top_k: int = 5,
         graph_top_k: int = 10,
         enable_cache: bool = True,
+        enable_query_expansion: bool = True,
     ):
         self.vector_top_k = vector_top_k
         self.graph_top_k = graph_top_k
         self.enable_cache = enable_cache
+        self.enable_query_expansion = enable_query_expansion
         self.vector_retriever = VectorRetriever()
         self.graph_retriever = GraphRetriever()
         self.community_detector = get_community_detector()
         self.summary_generator = get_summary_generator()
+        self.query_expander = MedicalQueryExpander()
 
     def _classify_query_intent(self, query: str) -> str:
         """分类查询意图
@@ -330,37 +334,165 @@ class DRIFTSearch:
 
     @cached(get_query_cache)
     def search(self, query: str, strategy: Optional[str] = None) -> Dict[str, Any]:
-        """执行DRIFT搜索 - 根据查询自动选择策略"""
+        """执行DRIFT搜索 - 根据查询自动选择策略，支持查询扩展"""
         if strategy:
             search_strategy = strategy
         else:
             search_strategy = self._classify_query_intent(query)
-        
+
         logger.info(f"Query: '{query}', Strategy: {search_strategy}")
-        
+
+        # 执行主查询检索
         if search_strategy == "global":
-            return self.global_search(query)
+            result = self.global_search(query)
         elif search_strategy == "local":
-            return self.local_search(query)
+            result = self.local_search(query)
         else:
-            return self.hybrid_search(query)
+            result = self.hybrid_search(query)
+
+        # 查询扩展：用同义词变体补充检索，合并去重
+        if self.enable_query_expansion:
+            result = self._expand_and_merge(query, result, search_strategy)
+
+        return result
+
+    def _expand_and_merge(self, query: str, main_result: Dict[str, Any], strategy: str) -> Dict[str, Any]:
+        """用查询扩展变体补充检索，合并去重结果"""
+        # 获取意图分类（细粒度，用于 query_expander）
+        intent = self._classify_fine_intent(query)
+        variants = self.query_expander.expand(query, intent=intent)
+
+        # 过滤掉与原查询相同的变体
+        extra_variants = [v for v in variants if v != query]
+        if not extra_variants:
+            return main_result
+
+        logger.info(f"Query expansion: {len(extra_variants)} variants for '{query}'")
+
+        # 收集已有实体名，用于去重
+        existing_entities = set()
+        for r in main_result.get("results", []):
+            name = r.get("entity") or r.get("name", "")
+            if name:
+                existing_entities.add(name.lower())
+
+        # 对每个变体执行检索，合并新结果
+        merged_results = list(main_result.get("results", []))
+        for variant in extra_variants[:3]:  # 最多3个变体，避免过多请求
+            try:
+                if strategy == "global":
+                    variant_result = self.global_search(variant)
+                elif strategy == "local":
+                    variant_result = self.local_search(variant)
+                else:
+                    variant_result = self.hybrid_search(variant)
+
+                for r in variant_result.get("results", []):
+                    name = r.get("entity") or r.get("name", "")
+                    if name and name.lower() not in existing_entities:
+                        existing_entities.add(name.lower())
+                        # 标记来源为扩展查询
+                        r["_expanded_from"] = variant
+                        merged_results.append(r)
+            except Exception as e:
+                logger.warning(f"Query expansion variant '{variant}' failed: {e}")
+
+        main_result["results"] = merged_results
+        main_result["expanded_queries"] = extra_variants[:3]
+        _structured_logger.info(
+            "query_expansion_completed",
+            original_query=query,
+            variant_count=len(extra_variants),
+            merged_result_count=len(merged_results),
+        )
+        return main_result
+
+    def _classify_fine_intent(self, query: str) -> str:
+        """细粒度意图分类，用于查询扩展模板选择"""
+        query_lower = query.lower()
+        # 药物相关
+        drug_indicators = ["药", "素", "苷", "林", "平", "汀", "普利", "沙坦", "洛尔", "阿司匹林", "胰岛素", "二甲双胍"]
+        if any(ind in query for ind in drug_indicators):
+            if "相互作用" in query or "联用" in query:
+                return "drug_interaction"
+            return "drug_query"
+        # 诊断相关
+        if any(ind in query for ind in ["诊断", "鉴别", "检查", "提示"]):
+            return "diagnosis_assist"
+        # 治疗相关
+        if any(ind in query for ind in ["治疗", "用药", "手术", "方案"]):
+            return "treatment_query"
+        # 检查相关
+        if any(ind in query for ind in ["检查", "检验", "指标", "正常值"]):
+            return "examination_query"
+        # 症状相关
+        if any(ind in query for ind in ["症状", "表现", "感觉"]):
+            return "symptom_query"
+        return "general"
 
     @track_process("retrieval.search_async")
     async def search_async(self, query: str, strategy: Optional[str] = None) -> Dict[str, Any]:
-        """执行DRIFT搜索 - 异步版本"""
+        """执行DRIFT搜索 - 异步版本，支持查询扩展"""
         if strategy:
             search_strategy = strategy
         else:
             search_strategy = self._classify_query_intent(query)
-        
+
         logger.info(f"Async Query: '{query}', Strategy: {search_strategy}")
-        
+
+        # 执行主查询检索
         if search_strategy == "global":
-            return self.global_search(query)
+            result = self.global_search(query)
         elif search_strategy == "local":
-            return await self.local_search_async(query)
+            result = await self.local_search_async(query)
         else:
-            return await self.hybrid_search_async(query)
+            result = await self.hybrid_search_async(query)
+
+        # 查询扩展：用同义词变体补充检索，合并去重
+        if self.enable_query_expansion:
+            result = await self._expand_and_merge_async(query, result, search_strategy)
+
+        return result
+
+    async def _expand_and_merge_async(self, query: str, main_result: Dict[str, Any], strategy: str) -> Dict[str, Any]:
+        """异步版查询扩展合并"""
+        intent = self._classify_fine_intent(query)
+        variants = self.query_expander.expand(query, intent=intent)
+
+        extra_variants = [v for v in variants if v != query]
+        if not extra_variants:
+            return main_result
+
+        logger.info(f"Async query expansion: {len(extra_variants)} variants for '{query}'")
+
+        existing_entities = set()
+        for r in main_result.get("results", []):
+            name = r.get("entity") or r.get("name", "")
+            if name:
+                existing_entities.add(name.lower())
+
+        merged_results = list(main_result.get("results", []))
+        for variant in extra_variants[:3]:
+            try:
+                if strategy == "global":
+                    variant_result = self.global_search(variant)
+                elif strategy == "local":
+                    variant_result = await self.local_search_async(variant)
+                else:
+                    variant_result = await self.hybrid_search_async(variant)
+
+                for r in variant_result.get("results", []):
+                    name = r.get("entity") or r.get("name", "")
+                    if name and name.lower() not in existing_entities:
+                        existing_entities.add(name.lower())
+                        r["_expanded_from"] = variant
+                        merged_results.append(r)
+            except Exception as e:
+                logger.warning(f"Async query expansion variant '{variant}' failed: {e}")
+
+        main_result["results"] = merged_results
+        main_result["expanded_queries"] = extra_variants[:3]
+        return main_result
 
     def explain_strategy(self, query: str) -> Dict[str, Any]:
         """解释为什么选择特定的检索策略"""

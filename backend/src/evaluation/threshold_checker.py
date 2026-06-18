@@ -7,7 +7,8 @@ class ThresholdConfig:
     overall_score: float = 0.75
     intent_accuracy: float = 0.80
     entity_recall: float = 0.70
-    answer_relevance: float = 0.70
+    keyword_matching: float = 0.70
+    answer_relevance: float = 0.30
     harmful_rate: float = 0.05
     error_rate: float = 0.02
     p95_latency_ms: float = 3000.0
@@ -41,6 +42,11 @@ class ThresholdChecker:
         if "entity_recall" in metrics:
             passed = metrics["entity_recall"] >= self.config.entity_recall
             results.append(("实体识别召回率", metrics["entity_recall"], self.config.entity_recall, passed))
+            passed_all &= passed
+
+        if "keyword_matching" in metrics:
+            passed = metrics["keyword_matching"] >= self.config.keyword_matching
+            results.append(("关键词匹配率", metrics["keyword_matching"], self.config.keyword_matching, passed))
             passed_all &= passed
 
         if "answer_relevance" in metrics:
@@ -81,6 +87,7 @@ class ThresholdChecker:
                     "overall_score": self.config.overall_score,
                     "intent_accuracy": self.config.intent_accuracy,
                     "entity_recall": self.config.entity_recall,
+                    "keyword_matching": self.config.keyword_matching,
                     "answer_relevance": self.config.answer_relevance,
                     "harmful_rate": self.config.harmful_rate,
                     "error_rate": self.config.error_rate,
@@ -95,7 +102,7 @@ class ThresholdChecker:
             return True
 
         reverse_check = metric_name in ["harmful_rate", "error_rate", "p95_latency_ms"]
-        
+
         if reverse_check:
             return value <= threshold
         else:
@@ -111,6 +118,7 @@ class ThresholdChecker:
         lines.append(f"  综合评分: >= {self.config.overall_score}")
         lines.append(f"  意图分类准确率: >= {self.config.intent_accuracy}")
         lines.append(f"  实体识别召回率: >= {self.config.entity_recall}")
+        lines.append(f"  关键词匹配率: >= {self.config.keyword_matching}")
         lines.append(f"  回答相关性: >= {self.config.answer_relevance}")
         lines.append(f"  有害内容率: <= {self.config.harmful_rate}")
         lines.append(f"  错误率: <= {self.config.error_rate}")

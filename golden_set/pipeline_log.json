@@ -1,0 +1,113 @@
+{
+  "start_time": "2026-06-11 11:00:00",
+  "end_time": "2026-06-11 11:00:03",
+  "total_duration_ms": 3240.5,
+  "mode": "static",
+  "phases": [
+    {
+      "name": "实体加载",
+      "status": "success",
+      "duration_ms": 12.3,
+      "input_count": 0,
+      "output_count": 658,
+      "detail": "疾病=152 症状=218 药物=108 解剖=63 科室=44"
+    },
+    {
+      "name": "Neo4j关系",
+      "status": "skipped",
+      "duration_ms": 0.0,
+      "input_count": 0,
+      "output_count": 0,
+      "detail": ""
+    },
+    {
+      "name": "定义型QA",
+      "status": "success",
+      "duration_ms": 18.7,
+      "input_count": 152,
+      "output_count": 15,
+      "detail": ""
+    },
+    {
+      "name": "ICD-10编码QA",
+      "status": "success",
+      "duration_ms": 8.2,
+      "input_count": 135,
+      "output_count": 9,
+      "detail": ""
+    },
+    {
+      "name": "缩写QA",
+      "status": "success",
+      "duration_ms": 10.1,
+      "input_count": 53,
+      "output_count": 9,
+      "detail": "跳过12条(长度过滤)"
+    },
+    {
+      "name": "药物QA",
+      "status": "success",
+      "duration_ms": 22.5,
+      "input_count": 34,
+      "output_count": 21,
+      "detail": "用途=11条 副作用=10条"
+    },
+    {
+      "name": "统计汇总",
+      "status": "success",
+      "duration_ms": 3.5,
+      "input_count": 79,
+      "output_count": 79,
+      "detail": ""
+    }
+  ],
+  "entity_stats": {
+    "diseases": 152,
+    "symptoms": 218,
+    "drugs": 108,
+    "anatomies": 63,
+    "departments": 44
+  },
+  "neo4j_stats": {},
+  "code_mapping_stats": {
+    "icd10_codes": 135,
+    "abbreviations": 65
+  },
+  "final_stats": {
+    "total_cases": 79,
+    "categories": {
+      "disease_knowledge": 15,
+      "drug_knowledge": 16,
+      "drug_safety": 14,
+      "diagnosis_assist": 11,
+      "medical_coding": 9,
+      "treatment_safety": 14
+    },
+    "intents": {
+      "disease_query": 17,
+      "drug_query": 26,
+      "examination_query": 18,
+      "health_advice": 10,
+      "treatment_query": 1,
+      "diagnosis_assist": 7
+    },
+    "difficulties": {
+      "easy": 27,
+      "medium": 37,
+      "hard": 15
+    },
+    "sources": {
+      "static_definition": 15,
+      "icd10": 9,
+      "abbreviation": 9,
+      "static_drug_disease": 11,
+      "static_side_effects": 10,
+      "neo4j_symptom": 5,
+      "neo4j_drug": 4,
+      "neo4j_department": 3,
+      "neo4j_examination": 3,
+      "neo4j_complication": 2
+    },
+    "shuffled": true
+  }
+}

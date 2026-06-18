@@ -75,11 +75,52 @@ class MetricsEngine:
     def keyword_matching(self, prediction: str, keywords: List[str]) -> float:
         if not keywords:
             return 1.0
-        
+
         prediction_lower = prediction.lower()
         matched = sum(1 for kw in keywords if kw.lower() in prediction_lower)
-        
+
         return matched / len(keywords)
+
+    def retrieval_recall(self, prediction: str, keywords: List[str], reference: str) -> float:
+        """检索召回率：衡量模型回答是否覆盖了参考答案中的关键信息点
+
+        基于关键词在回答中的出现情况，评估检索系统是否召回了足够的信息
+        使模型能够生成包含关键医学概念的回答。
+        """
+        if not keywords:
+            return 1.0
+
+        prediction_lower = prediction.lower()
+        matched_keywords = [kw for kw in keywords if kw.lower() in prediction_lower]
+
+        # 额外检查：参考答案中的核心术语是否出现在模型回答中
+        ref_terms = self._extract_medical_terms(reference)
+        matched_terms = [t for t in ref_terms if t.lower() in prediction_lower]
+
+        keyword_recall = len(matched_keywords) / len(keywords)
+        term_recall = len(matched_terms) / len(ref_terms) if ref_terms else 1.0
+
+        return 0.6 * keyword_recall + 0.4 * term_recall
+
+    def _extract_medical_terms(self, text: str) -> List[str]:
+        """从参考答案中提取医学术语（基于规则）"""
+        terms = []
+        # 提取括号内的英文缩写
+        abbr_pattern = r'[（(]([A-Z]{2,})[）)]'
+        for match in re.finditer(abbr_pattern, text):
+            terms.append(match.group(1))
+
+        # 提取ICD编码
+        icd_pattern = r'[A-Z]\d{2}(\.\d+)?'
+        for match in re.finditer(icd_pattern, text):
+            terms.append(match.group(0))
+
+        # 提取数字+单位的医学指标
+        num_pattern = r'\d+\.?\d*\s*(mmHg|mg|ml|g|IU|U|%|次/分|次/分|mmol)'
+        for match in re.finditer(num_pattern, text):
+            terms.append(match.group(0))
+
+        return terms
 
     def semantic_similarity(self, prediction: str, reference: str) -> float:
         try:
@@ -104,6 +145,7 @@ class MetricsEngine:
             'rouge_2': self.rouge_2(prediction, reference),
             'rouge_l': self.rouge_l(prediction, reference),
             'keyword_matching': self.keyword_matching(prediction, keywords),
+            'retrieval_recall': self.retrieval_recall(prediction, keywords, reference),
             'semantic_similarity': ss,
         }
 

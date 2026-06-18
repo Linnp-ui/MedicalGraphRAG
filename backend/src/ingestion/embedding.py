@@ -19,15 +19,17 @@ class EmbeddingClient:
         self._client = None
 
     def _get_client(self):
-        """Get or create DashScope client"""
+        """Get or create embedding client (supports separate API key/base URL)"""
         if self._client is None:
             try:
                 from openai import OpenAI
 
                 settings = get_settings()
+                api_key = settings.embedding_api_key or settings.dashscope_api_key
+                base_url = settings.embedding_base_url or settings.dashscope_base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1"
                 self._client = OpenAI(
-                    api_key=settings.dashscope_api_key,
-                    base_url=settings.dashscope_base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                    api_key=api_key,
+                    base_url=base_url,
                 )
             except ImportError:
                 logger.error("openai package not installed")

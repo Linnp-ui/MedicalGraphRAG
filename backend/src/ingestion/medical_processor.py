@@ -75,10 +75,17 @@ class MedicalTextProcessor:
 
                 from transformers import pipeline
 
-                print("首次加载NLP模型，请稍候...")
+                # 优先从本地 models/ 目录加载
+                local_model_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                    "models", "bert-base-chinese-medical-ner"
+                )
+                model_source = local_model_path if os.path.isdir(local_model_path) else "iioSnail/bert-base-chinese-medical-ner"
+
+                print(f"首次加载NLP模型，请稍候... (来源: {model_source})")
                 _NLP_MODEL_CACHE = pipeline(
                     "token-classification",
-                    model="iioSnail/bert-base-chinese-medical-ner",
+                    model=model_source,
                     aggregation_strategy="simple"
                 )
                 _NLP_MODEL_AVAILABLE = True
@@ -110,9 +117,29 @@ class MedicalTextProcessor:
             try:
                 results = nlp(text)
                 entities = []
+                # NER模型标签到标准类型的映射
+                # 该模型只输出M（医疗实体），需用_classify_entity_type细分
+                ner_type_map = {
+                    "Disease": "DISEASE",
+                    "Drug": "DRUG",
+                    "Symptom": "SYMPTOM",
+                    "Examination": "EXAMINATION",
+                    "Treatment": "TREATMENT",
+                    "Anatomy": "ANATOMY",
+                    "Department": "DEPARTMENT",
+                }
                 for item in results:
                     entity_text = item.get("word", "").replace(" ", "")
-                    entity_type = self._classify_entity_type(entity_text)
+                    # 优先使用NER模型的细分类型标签
+                    ner_type = item.get("entity_group", "")
+                    if ner_type in ner_type_map:
+                        entity_type = ner_type_map[ner_type]
+                    else:
+                        # 模型只输出M（医疗实体），需用规则细分
+                        entity_type = ner_type_map.get(
+                            self._classify_entity_type(entity_text),
+                            self._classify_entity_type(entity_text)
+                        )
                     entities.append({
                         "type": entity_type,
                         "text": entity_text,

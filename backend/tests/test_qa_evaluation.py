@@ -328,6 +328,338 @@ class QAEvaluator:
                 expected_answer_keywords=["脂肪肝", "饮食", "注意", "控制"],
                 context="脂肪肝患者应控制饮食、减重、戒酒、适度运动。"
             ),
+            # ──────────────────────────────────────────────
+            # 新增：examination_query 检查查询 (6 cases)
+            # ──────────────────────────────────────────────
+            TestCase(
+                question="血常规检查能查出什么？",
+                expected_intent="examination_query",
+                expected_entities=["血常规"],
+                expected_answer_keywords=["血常规", "检查", "红细胞", "白细胞"],
+                context="血常规可检测白细胞、红细胞、血小板计数及血红蛋白等。"
+            ),
+            TestCase(
+                question="做CT检查有辐射吗？",
+                expected_intent="examination_query",
+                expected_entities=["CT"],
+                expected_answer_keywords=["CT", "辐射", "安全"],
+                context="CT检查有一定辐射，单次常规CT检查辐射剂量在安全范围内。"
+            ),
+            TestCase(
+                question="胃镜检查前需要准备什么？",
+                expected_intent="examination_query",
+                expected_entities=["胃镜"],
+                expected_answer_keywords=["胃镜", "准备", "空腹"],
+                context="胃镜检查前需空腹6-8小时，停用抗凝药物。"
+            ),
+            TestCase(
+                question="心电图检查主要查什么？",
+                expected_intent="examination_query",
+                expected_entities=["心电图"],
+                expected_answer_keywords=["心电图", "心脏", "心律"],
+                context="心电图用于检测心脏电活动，诊断心律失常、心肌缺血等。"
+            ),
+            TestCase(
+                question="MRI和CT有什么区别？",
+                expected_intent="examination_query",
+                expected_entities=["MRI", "CT"],
+                expected_answer_keywords=["MRI", "CT", "区别", "辐射"],
+                context="MRI利用磁场成像无辐射，CT利用X射线有辐射，各有优势。"
+            ),
+            TestCase(
+                question="肿瘤标志物升高一定是癌症吗？",
+                expected_intent="examination_query",
+                expected_entities=["肿瘤标志物"],
+                expected_answer_keywords=["肿瘤标志物", "癌症", "确诊"],
+                context="肿瘤标志物升高不能直接确诊癌症，需结合其他检查综合判断。"
+            ),
+            # ──────────────────────────────────────────────
+            # 新增：prevention_query 预防查询 (4 cases)
+            # ──────────────────────────────────────────────
+            TestCase(
+                question="如何预防糖尿病？",
+                expected_intent="prevention_query",
+                expected_entities=["糖尿病"],
+                expected_answer_keywords=["糖尿病", "预防", "饮食", "运动"],
+                context="预防糖尿病需合理饮食、规律运动、控制体重、定期检测血糖。"
+            ),
+            TestCase(
+                question="怎样预防骨质疏松？",
+                expected_intent="prevention_query",
+                expected_entities=["骨质疏松"],
+                expected_answer_keywords=["骨质疏松", "预防", "钙", "运动"],
+                context="预防骨质疏松需补充钙和维生素D、适度运动、避免吸烟酗酒。"
+            ),
+            TestCase(
+                question="如何预防肝癌？",
+                expected_intent="prevention_query",
+                expected_entities=["肝癌"],
+                expected_answer_keywords=["肝癌", "预防", "乙肝", "戒酒"],
+                context="预防肝癌需接种乙肝疫苗、戒酒、避免食用霉变食物。"
+            ),
+            TestCase(
+                question="怎样预防流感传播？",
+                expected_intent="prevention_query",
+                expected_entities=["流感"],
+                expected_answer_keywords=["流感", "预防", "疫苗", "卫生"],
+                context="预防流感需接种疫苗、勤洗手、避免人群密集场所。"
+            ),
+            # ──────────────────────────────────────────────
+            # 新增：treatment_query 治疗查询 (5 cases)
+            # ──────────────────────────────────────────────
+            TestCase(
+                question="冠心病的治疗方法有哪些？",
+                expected_intent="treatment_query",
+                expected_entities=["冠心病"],
+                expected_answer_keywords=["冠心病", "治疗", "药物", "手术"],
+                context="冠心病治疗包括药物治疗、介入治疗和冠脉搭桥手术。"
+            ),
+            TestCase(
+                question="胃溃疡怎么治疗？",
+                expected_intent="treatment_query",
+                expected_entities=["胃溃疡"],
+                expected_answer_keywords=["胃溃疡", "治疗", "药物", "抑酸"],
+                context="胃溃疡治疗包括抑酸药物、胃黏膜保护剂和根除幽门螺杆菌。"
+            ),
+            TestCase(
+                question="甲亢的治疗方案有哪些？",
+                expected_intent="treatment_query",
+                expected_entities=["甲亢"],
+                expected_answer_keywords=["甲亢", "治疗", "药物", "手术"],
+                context="甲亢治疗包括抗甲状腺药物、放射性碘治疗和手术切除。"
+            ),
+            TestCase(
+                question="腰椎间盘突出怎么治疗？",
+                expected_intent="treatment_query",
+                expected_entities=["腰椎间盘突出"],
+                expected_answer_keywords=["腰椎间盘突出", "治疗", "保守", "手术"],
+                context="腰椎间盘突出治疗包括保守治疗和手术治疗。"
+            ),
+            TestCase(
+                question="慢性肾衰竭怎么治疗？",
+                expected_intent="treatment_query",
+                expected_entities=["慢性肾衰竭"],
+                expected_answer_keywords=["肾衰竭", "治疗", "透析", "移植"],
+                context="慢性肾衰竭治疗包括药物治疗、透析和肾移植。"
+            ),
+            # ──────────────────────────────────────────────
+            # 新增：drug_query 药物查询补充 (8 cases)
+            # ──────────────────────────────────────────────
+            TestCase(
+                question="氯吡格雷的作用是什么？",
+                expected_intent="drug_query",
+                expected_entities=["氯吡格雷"],
+                expected_answer_keywords=["氯吡格雷", "抗血小板", "血栓"],
+                context="氯吡格雷是抗血小板药物，用于预防血栓形成。"
+            ),
+            TestCase(
+                question="奥美拉唑是治什么病的？",
+                expected_intent="drug_query",
+                expected_entities=["奥美拉唑"],
+                expected_answer_keywords=["奥美拉唑", "胃酸", "溃疡"],
+                context="奥美拉唑是质子泵抑制剂，用于治疗胃酸相关疾病。"
+            ),
+            TestCase(
+                question="阿莫西林属于哪类抗生素？",
+                expected_intent="drug_query",
+                expected_entities=["阿莫西林"],
+                expected_answer_keywords=["阿莫西林", "青霉素", "抗生素"],
+                context="阿莫西林属于青霉素类抗生素，用于治疗细菌感染。"
+            ),
+            TestCase(
+                question="辛伐他汀的用法用量？",
+                expected_intent="drug_query",
+                expected_entities=["辛伐他汀"],
+                expected_answer_keywords=["辛伐他汀", "降脂", "用量"],
+                context="辛伐他汀是降脂药，通常晚间服用。"
+            ),
+            TestCase(
+                question="氨氯地平有什么副作用？",
+                expected_intent="drug_query",
+                expected_entities=["氨氯地平"],
+                expected_answer_keywords=["氨氯地平", "副作用", "水肿"],
+                context="氨氯地平常见副作用包括下肢水肿、头痛、面部潮红。"
+            ),
+            TestCase(
+                question="蒙脱石散怎么服用？",
+                expected_intent="drug_query",
+                expected_entities=["蒙脱石散"],
+                expected_answer_keywords=["蒙脱石散", "服用", "腹泻"],
+                context="蒙脱石散用于治疗腹泻，需空腹服用。"
+            ),
+            TestCase(
+                question="头孢克洛和头孢克肟有什么区别？",
+                expected_intent="drug_query",
+                expected_entities=["头孢克洛", "头孢克肟"],
+                expected_answer_keywords=["头孢", "区别", "代数"],
+                context="头孢克洛属第二代头孢，头孢克肟属第三代头孢，抗菌谱不同。"
+            ),
+            TestCase(
+                question="氯雷他定能长期服用吗？",
+                expected_intent="drug_query",
+                expected_entities=["氯雷他定"],
+                expected_answer_keywords=["氯雷他定", "长期", "过敏"],
+                context="氯雷他定是抗过敏药，长期服用需在医生指导下进行。"
+            ),
+            # ──────────────────────────────────────────────
+            # 新增：disease_query 疾病查询补充 (8 cases)
+            # ──────────────────────────────────────────────
+            TestCase(
+                question="系统性红斑狼疮是什么病？",
+                expected_intent="disease_query",
+                expected_entities=["系统性红斑狼疮"],
+                expected_answer_keywords=["红斑狼疮", "自身免疫", "全身"],
+                context="系统性红斑狼疮是一种自身免疫性疾病，可累及全身多个器官。"
+            ),
+            TestCase(
+                question="慢性阻塞性肺疾病的病因是什么？",
+                expected_intent="disease_query",
+                expected_entities=["慢性阻塞性肺疾病"],
+                expected_answer_keywords=["慢阻肺", "病因", "吸烟"],
+                context="慢阻肺主要病因包括吸烟、空气污染和职业粉尘暴露。"
+            ),
+            TestCase(
+                question="肝硬化能治好吗？",
+                expected_intent="disease_query",
+                expected_entities=["肝硬化"],
+                expected_answer_keywords=["肝硬化", "治疗", "不可逆"],
+                context="肝硬化是肝脏不可逆的纤维化改变，但可延缓进展。"
+            ),
+            TestCase(
+                question="阑尾炎的典型症状是什么？",
+                expected_intent="disease_query",
+                expected_entities=["阑尾炎"],
+                expected_answer_keywords=["阑尾炎", "症状", "转移性腹痛"],
+                context="阑尾炎典型症状为转移性右下腹痛，伴恶心呕吐。"
+            ),
+            TestCase(
+                question="甲状腺功能减退有什么表现？",
+                expected_intent="disease_query",
+                expected_entities=["甲状腺功能减退"],
+                expected_answer_keywords=["甲减", "表现", "乏力", "怕冷"],
+                context="甲减表现为乏力、怕冷、体重增加、皮肤干燥等。"
+            ),
+            TestCase(
+                question="胃食管反流病怎么引起的？",
+                expected_intent="disease_query",
+                expected_entities=["胃食管反流"],
+                expected_answer_keywords=["胃食管反流", "原因", "食管括约肌"],
+                context="胃食管反流病由下食管括约肌功能障碍导致胃内容物反流。"
+            ),
+            TestCase(
+                question="带状疱疹会传染吗？",
+                expected_intent="disease_query",
+                expected_entities=["带状疱疹"],
+                expected_answer_keywords=["带状疱疹", "传染", "水痘"],
+                context="带状疱疹本身不直接传染，但可致未免疫者感染水痘。"
+            ),
+            TestCase(
+                question="慢性肾炎会发展成尿毒症吗？",
+                expected_intent="disease_query",
+                expected_entities=["慢性肾炎", "尿毒症"],
+                expected_answer_keywords=["慢性肾炎", "尿毒症", "进展"],
+                context="慢性肾炎如不及时治疗可能进展为尿毒症。"
+            ),
+            # ──────────────────────────────────────────────
+            # 新增：symptom_query 症状查询补充 (4 cases)
+            # ──────────────────────────────────────────────
+            TestCase(
+                question="手脚发麻是什么原因？",
+                expected_intent="symptom_query",
+                expected_entities=["手脚发麻"],
+                expected_answer_keywords=["发麻", "原因", "神经", "颈椎"],
+                context="手脚发麻可能由颈椎病、糖尿病神经病变、脑血管病等引起。"
+            ),
+            TestCase(
+                question="胸闷气短是怎么回事？",
+                expected_intent="symptom_query",
+                expected_entities=["胸闷", "气短"],
+                expected_answer_keywords=["胸闷", "气短", "心脏", "肺部"],
+                context="胸闷气短可能由心脏疾病、肺部疾病或焦虑等引起。"
+            ),
+            TestCase(
+                question="关节红肿热痛是什么原因？",
+                expected_intent="symptom_query",
+                expected_entities=["关节", "红肿"],
+                expected_answer_keywords=["关节", "红肿", "痛风", "感染"],
+                context="关节红肿热痛常见于痛风、化脓性关节炎、类风湿等。"
+            ),
+            TestCase(
+                question="早上起来恶心干呕是怎么回事？",
+                expected_intent="symptom_query",
+                expected_entities=["恶心", "干呕"],
+                expected_answer_keywords=["恶心", "干呕", "咽炎", "胃"],
+                context="晨起恶心干呕常见于慢性咽炎、胃食管反流等。"
+            ),
+            # ──────────────────────────────────────────────
+            # 新增：diagnosis_assist 诊断辅助补充 (5 cases)
+            # ──────────────────────────────────────────────
+            TestCase(
+                question="我右下腹疼痛，伴有发烧，是什么病？",
+                expected_intent="diagnosis_assist",
+                expected_entities=["腹痛", "发烧"],
+                expected_answer_keywords=["右下腹", "疼痛", "阑尾炎"],
+                context="右下腹痛伴发热需高度怀疑急性阑尾炎。"
+            ),
+            TestCase(
+                question="皮肤发黄、小便颜色深，可能是什么问题？",
+                expected_intent="diagnosis_assist",
+                expected_entities=["皮肤发黄", "小便"],
+                expected_answer_keywords=["黄疸", "肝", "胆"],
+                context="皮肤发黄伴深色尿液提示黄疸，需检查肝胆系统。"
+            ),
+            TestCase(
+                question="我最近体重突然下降了很多，是什么原因？",
+                expected_intent="diagnosis_assist",
+                expected_entities=["体重下降"],
+                expected_answer_keywords=["体重", "下降", "原因", "检查"],
+                context="不明原因体重显著下降需排除恶性肿瘤、甲亢、糖尿病等。"
+            ),
+            TestCase(
+                question="我手指关节晨僵，握拳困难，是什么病？",
+                expected_intent="diagnosis_assist",
+                expected_entities=["晨僵", "关节"],
+                expected_answer_keywords=["晨僵", "类风湿", "关节炎"],
+                context="手指关节晨僵是类风湿性关节炎的典型表现。"
+            ),
+            TestCase(
+                question="我走路时腿疼，休息后缓解，是什么问题？",
+                expected_intent="diagnosis_assist",
+                expected_entities=["腿疼"],
+                expected_answer_keywords=["间歇性跛行", "血管", "下肢"],
+                context="走路时腿疼休息后缓解是间歇性跛行，提示下肢动脉缺血。"
+            ),
+            # ──────────────────────────────────────────────
+            # 新增：health_advice 健康建议补充 (4 cases)
+            # ──────────────────────────────────────────────
+            TestCase(
+                question="高血压患者日常饮食注意什么？",
+                expected_intent="health_advice",
+                expected_entities=["高血压"],
+                expected_answer_keywords=["高血压", "饮食", "低盐", "控制"],
+                context="高血压患者应低盐饮食、控制体重、限制饮酒。"
+            ),
+            TestCase(
+                question="糖尿病患者能吃水果吗？",
+                expected_intent="health_advice",
+                expected_entities=["糖尿病"],
+                expected_answer_keywords=["糖尿病", "水果", "血糖", "控制"],
+                context="糖尿病患者在血糖控制良好时可适量食用低糖水果。"
+            ),
+            TestCase(
+                question="久坐办公室如何保护腰椎？",
+                expected_intent="health_advice",
+                expected_entities=["腰椎"],
+                expected_answer_keywords=["腰椎", "保护", "坐姿", "运动"],
+                context="久坐应保持正确坐姿、定时起身活动、加强腰背肌锻炼。"
+            ),
+            TestCase(
+                question="备孕期间需要补充什么营养？",
+                expected_intent="health_advice",
+                expected_entities=["备孕"],
+                expected_answer_keywords=["备孕", "叶酸", "营养", "补充"],
+                context="备孕期间应补充叶酸，保持均衡营养，戒烟戒酒。"
+            ),
         ]
 
     def evaluate_intent(self, question: str, expected_intent: str) -> bool:

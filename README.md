@@ -5,7 +5,7 @@
 ## 项目概述
 
 MedicalGraph 是一个将通用知识图谱系统转型为专业医疗知识图谱的智能问答平台。系统具备医疗实体识别、关系抽取、知识融合和智能问答等核心能力，为用户提供准确、专业的医疗信息服务。
-![项目运行截图](pic/image2.png)
+![项目运行截图](docs/images/image2.png)
 
 ## 关键特性
 
@@ -76,6 +76,19 @@ cp .env.example .env
 # 编辑 .env 文件，配置 Neo4j 和 DashScope
 ```
 
+### 下载实体提取模型
+
+系统使用 `bert-base-chinese-medical-ner` 模型进行医疗实体识别（疾病、药物、症状等）。首次启动时若本地无模型，系统会自动尝试在线下载；也可手动预下载到本地：
+
+```bash
+cd backend
+python scripts/download_model.py
+```
+
+模型将保存至 `backend/models/bert-base-chinese-medical-ner/`（约 388 MB）。
+
+> 若网络无法访问 HuggingFace，脚本会自动使用 `hf-mirror.com` 镜像源下载。如未下载模型，系统将回退到基于规则的实体提取（精度较低）。
+
 ### 前端安装
 
 ```bash
@@ -136,6 +149,9 @@ GRAPHRAG/
 │   │   ├── ingestion/         # 数据入库
 │   │   ├── retrieval/         # 检索模块
 │   │   └── workflow/          # 工作流
+│   ├── models/                # 本地模型文件
+│   │   └── bert-base-chinese-medical-ner/  # 医疗NER模型
+│   ├── scripts/               # 工具脚本
 │   ├── tests/                 # 测试用例
 │   └── config/                # 配置文件
 ├── frontend/                  # 前端应用
@@ -190,21 +206,21 @@ GRAPHRAG/
 - **完整性**: ✅ 良好 - 覆盖搜索、查询、摄入、图谱操作等核心功能
 - **错误处理**: ⚠️ 中等 - 有统一异常捕获，但缺乏细致的错误分类
 - **监控能力**: ✅ 良好 - 集成Prometheus指标和请求计时
-![API流程](pic/image.png)
+![API流程](docs/images/image.png)
 
 #### 2. 数据摄入流程
 
 - **批量处理**: ✅ 良好 - 支持同步/异步批量处理
 - **实体识别**: ✅ 良好 - 结合NER模型和规则匹配，具有降级能力
 - **模型缓存**: ⚠️ 中等 - 使用全局变量缓存，缺乏线程安全保护
-![数据摄入流程](pic/ingest.png)
+![数据摄入流程](docs/images/ingest.png)
 
 #### 3. 检索流程
 
 - **策略多样性**: ✅ 良好 - 支持全局/局部/混合三种检索策略
 - **动态Alpha**: ✅ 良好 - 根据查询意图动态调整权重
 - **缓存机制**: ✅ 良好 - 使用装饰器实现查询缓存
-![检索流程](pic/retrieval.png)
+![检索流程](docs/images/retrieval.png)
 
 #### 4. 工作流编排
 

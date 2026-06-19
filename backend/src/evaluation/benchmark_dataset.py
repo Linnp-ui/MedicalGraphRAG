@@ -534,6 +534,363 @@ class MedicalBenchmarkLoader:
                 category="examination",
                 difficulty="medium"
             ),
+            # ──────────────────────────────────────────────
+            # 新增：drug 药物查询补充 (10 cases)
+            # ──────────────────────────────────────────────
+            BenchmarkItem(
+                question="奥美拉唑是治什么病的？",
+                reference_answer="奥美拉唑是质子泵抑制剂，用于治疗胃溃疡、十二指肠溃疡、胃食管反流病等胃酸相关疾病。",
+                expected_intent="drug_query",
+                expected_entities=["奥美拉唑"],
+                keywords=["奥美拉唑", "胃酸", "溃疡", "质子泵"],
+                category="drug",
+                difficulty="easy"
+            ),
+            BenchmarkItem(
+                question="阿莫西林属于哪类抗生素？",
+                reference_answer="阿莫西林属于青霉素类广谱抗生素，用于治疗敏感菌引起的呼吸道感染、尿路感染、皮肤感染等。",
+                expected_intent="drug_query",
+                expected_entities=["阿莫西林"],
+                keywords=["阿莫西林", "青霉素", "抗生素", "感染"],
+                category="drug",
+                difficulty="easy"
+            ),
+            BenchmarkItem(
+                question="氨氯地平有什么副作用？",
+                reference_answer="氨氯地平常见副作用包括下肢水肿、头痛、面部潮红、心悸等，少数患者可出现头晕和乏力。",
+                expected_intent="drug_query",
+                expected_entities=["氨氯地平"],
+                keywords=["氨氯地平", "副作用", "水肿", "头痛"],
+                category="drug",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="氯吡格雷的作用是什么？",
+                reference_answer="氯吡格雷是抗血小板药物，通过抑制血小板聚集预防动脉血栓形成，常用于冠心病和脑梗死的二级预防。",
+                expected_intent="drug_query",
+                expected_entities=["氯吡格雷"],
+                keywords=["氯吡格雷", "抗血小板", "血栓", "预防"],
+                category="drug",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="蒙脱石散怎么服用？",
+                reference_answer="蒙脱石散用于治疗急慢性腹泻，需空腹服用，将药粉倒入半杯温水中搅匀后服下，与其他药物间隔1-2小时。",
+                expected_intent="drug_query",
+                expected_entities=["蒙脱石散"],
+                keywords=["蒙脱石散", "服用", "腹泻", "空腹"],
+                category="drug",
+                difficulty="easy"
+            ),
+            BenchmarkItem(
+                question="辛伐他汀的用法用量？",
+                reference_answer="辛伐他汀是降脂药，常用剂量为每晚10-40mg，建议晚间服用（胆固醇合成高峰在夜间），需定期监测肝功能和肌酸激酶。",
+                expected_intent="drug_query",
+                expected_entities=["辛伐他汀"],
+                keywords=["辛伐他汀", "降脂", "晚间", "肝功能"],
+                category="drug",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="头孢克洛和头孢克肟有什么区别？",
+                reference_answer="头孢克洛属第二代头孢菌素，对革兰阳性菌作用较强；头孢克肟属第三代头孢菌素，对革兰阴性菌作用更强。两者抗菌谱不同，适应证也有差异。",
+                expected_intent="drug_query",
+                expected_entities=["头孢克洛", "头孢克肟"],
+                keywords=["头孢", "区别", "第二代", "第三代", "抗菌谱"],
+                category="drug",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="氯雷他定能长期服用吗？",
+                reference_answer="氯雷他定是第二代抗组胺药，用于过敏性疾病。一般短期使用安全，长期服用需在医生指导下进行，注意监测肝功能。",
+                expected_intent="drug_query",
+                expected_entities=["氯雷他定"],
+                keywords=["氯雷他定", "长期", "过敏", "抗组胺"],
+                category="drug",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="甲硝唑能治什么感染？",
+                reference_answer="甲硝唑对厌氧菌和部分原虫有效，用于治疗滴虫性阴道炎、阿米巴病、厌氧菌感染、幽门螺杆菌感染等。服药期间及停药后3天内禁止饮酒。",
+                expected_intent="drug_query",
+                expected_entities=["甲硝唑"],
+                keywords=["甲硝唑", "厌氧菌", "滴虫", "饮酒"],
+                category="drug",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="地塞米松是激素药吗？",
+                reference_answer="地塞米松是糖皮质激素类药物，具有抗炎、抗过敏、免疫抑制等作用。短期使用较安全，长期使用需注意骨质疏松、血糖升高、感染风险增加等副作用。",
+                expected_intent="drug_query",
+                expected_entities=["地塞米松"],
+                keywords=["地塞米松", "激素", "糖皮质激素", "副作用"],
+                category="drug",
+                difficulty="easy"
+            ),
+            # ──────────────────────────────────────────────
+            # 新增：treatment 治疗查询补充 (8 cases)
+            # ──────────────────────────────────────────────
+            BenchmarkItem(
+                question="冠心病的治疗方法有哪些？",
+                reference_answer="冠心病治疗包括药物治疗（抗血小板、他汀、β受体阻滞剂等）、介入治疗（支架植入）和冠脉搭桥手术，根据病情严重程度选择。",
+                expected_intent="treatment_query",
+                expected_entities=["冠心病"],
+                keywords=["冠心病", "治疗", "支架", "药物", "手术"],
+                category="treatment",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="胃溃疡怎么治疗？",
+                reference_answer="胃溃疡治疗包括抑酸药物（质子泵抑制剂）、胃黏膜保护剂和根除幽门螺杆菌治疗，疗程通常6-8周。",
+                expected_intent="treatment_query",
+                expected_entities=["胃溃疡"],
+                keywords=["胃溃疡", "治疗", "抑酸", "幽门螺杆菌"],
+                category="treatment",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="甲亢的治疗方案有哪些？",
+                reference_answer="甲亢治疗包括抗甲状腺药物（甲巯咪唑、丙硫氧嘧啶）、放射性碘治疗和手术切除甲状腺，根据病情和患者情况选择。",
+                expected_intent="treatment_query",
+                expected_entities=["甲亢"],
+                keywords=["甲亢", "治疗", "抗甲状腺", "放射性碘", "手术"],
+                category="treatment",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="腰椎间盘突出怎么治疗？",
+                reference_answer="腰椎间盘突出首选保守治疗（卧床休息、牵引、理疗、药物），保守治疗无效或出现马尾综合征时需手术治疗。",
+                expected_intent="treatment_query",
+                expected_entities=["腰椎间盘突出"],
+                keywords=["腰椎间盘突出", "治疗", "保守", "手术", "牵引"],
+                category="treatment",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="慢性肾衰竭怎么治疗？",
+                reference_answer="慢性肾衰竭治疗包括控制原发病、延缓肾功能恶化（ACEI/ARB）、纠正并发症（贫血、骨病），终末期需透析或肾移植。",
+                expected_intent="treatment_query",
+                expected_entities=["慢性肾衰竭"],
+                keywords=["肾衰竭", "治疗", "透析", "移植", "延缓"],
+                category="treatment",
+                difficulty="hard"
+            ),
+            BenchmarkItem(
+                question="白内障需要手术吗？",
+                reference_answer="白内障是晶状体混浊导致的视力下降，手术是唯一有效治疗方法。当视力下降影响日常生活时即可考虑手术，无需等到完全看不见。",
+                expected_intent="treatment_query",
+                expected_entities=["白内障"],
+                keywords=["白内障", "手术", "晶状体", "视力"],
+                category="treatment",
+                difficulty="easy"
+            ),
+            BenchmarkItem(
+                question="房颤怎么治疗？",
+                reference_answer="房颤治疗包括心率控制（β受体阻滞剂、地高辛）、节律控制（胺碘酮复律）、抗凝预防脑卒中（华法林或新型口服抗凝药），必要时可行导管消融术。",
+                expected_intent="treatment_query",
+                expected_entities=["房颤"],
+                keywords=["房颤", "治疗", "抗凝", "复律", "消融"],
+                category="treatment",
+                difficulty="hard"
+            ),
+            BenchmarkItem(
+                question="肩周炎怎么治疗和康复？",
+                reference_answer="肩周炎治疗包括止痛药物、局部封闭注射、理疗和功能锻炼。康复关键是坚持肩关节活动度训练（爬墙运动、钟摆运动等），避免长期不动导致关节僵硬。",
+                expected_intent="treatment_query",
+                expected_entities=["肩周炎"],
+                keywords=["肩周炎", "治疗", "康复", "锻炼", "理疗"],
+                category="treatment",
+                difficulty="medium"
+            ),
+            # ──────────────────────────────────────────────
+            # 新增：prevention 预防查询补充 (6 cases)
+            # ──────────────────────────────────────────────
+            BenchmarkItem(
+                question="如何预防糖尿病？",
+                reference_answer="预防糖尿病需合理饮食（减少精制糖和高脂食物）、规律运动（每周150分钟中等强度）、控制体重、定期检测血糖，尤其有家族史者更需注意。",
+                expected_intent="prevention_query",
+                expected_entities=["糖尿病"],
+                keywords=["糖尿病", "预防", "饮食", "运动", "血糖"],
+                category="prevention",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="怎样预防骨质疏松？",
+                reference_answer="预防骨质疏松需补充钙和维生素D、适度负重运动、避免吸烟和过量饮酒、定期检测骨密度，绝经后女性更需关注。",
+                expected_intent="prevention_query",
+                expected_entities=["骨质疏松"],
+                keywords=["骨质疏松", "预防", "钙", "维生素D", "运动"],
+                category="prevention",
+                difficulty="easy"
+            ),
+            BenchmarkItem(
+                question="如何预防肝癌？",
+                reference_answer="预防肝癌需接种乙肝疫苗、积极治疗慢性乙肝/丙肝、戒酒、避免食用霉变食物（含黄曲霉毒素）、定期体检筛查。",
+                expected_intent="prevention_query",
+                expected_entities=["肝癌"],
+                keywords=["肝癌", "预防", "乙肝", "戒酒", "黄曲霉毒素"],
+                category="prevention",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="怎样预防流感传播？",
+                reference_answer="预防流感需每年接种流感疫苗、勤洗手、咳嗽打喷嚏遮住口鼻、避免去人群密集场所、保持室内通风。",
+                expected_intent="prevention_query",
+                expected_entities=["流感"],
+                keywords=["流感", "预防", "疫苗", "洗手", "通风"],
+                category="prevention",
+                difficulty="easy"
+            ),
+            BenchmarkItem(
+                question="如何预防脑卒中？",
+                reference_answer="预防脑卒中需控制高血压、糖尿病、高血脂等危险因素，戒烟限酒，规律运动，保持健康体重，有心房颤动者需规范抗凝治疗。",
+                expected_intent="prevention_query",
+                expected_entities=["脑卒中"],
+                keywords=["脑卒中", "预防", "高血压", "抗凝", "戒烟"],
+                category="prevention",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="如何预防深静脉血栓？",
+                reference_answer="预防深静脉血栓需避免久坐不动、术后早期下床活动、必要时使用弹力袜或抗凝药物、多饮水、长途旅行中定时活动下肢。",
+                expected_intent="prevention_query",
+                expected_entities=["深静脉血栓"],
+                keywords=["深静脉血栓", "预防", "活动", "弹力袜", "抗凝"],
+                category="prevention",
+                difficulty="medium"
+            ),
+            # ──────────────────────────────────────────────
+            # 新增：health_advice 健康建议补充 (6 cases)
+            # ──────────────────────────────────────────────
+            BenchmarkItem(
+                question="高血压患者日常饮食注意什么？",
+                reference_answer="高血压患者应低盐饮食（每日盐摄入<6g）、多吃蔬果、控制体重、限制饮酒、避免高脂高胆固醇食物。",
+                expected_intent="health_advice",
+                expected_entities=["高血压"],
+                keywords=["高血压", "饮食", "低盐", "蔬果", "控制体重"],
+                category="health_advice",
+                difficulty="easy"
+            ),
+            BenchmarkItem(
+                question="糖尿病患者能吃水果吗？",
+                reference_answer="糖尿病患者在血糖控制良好时可适量食用低糖水果（如苹果、梨、柚子），应在两餐之间食用，避免高糖水果（如荔枝、龙眼），并计入每日总热量。",
+                expected_intent="health_advice",
+                expected_entities=["糖尿病"],
+                keywords=["糖尿病", "水果", "血糖", "低糖", "热量"],
+                category="health_advice",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="久坐办公室如何保护腰椎？",
+                reference_answer="久坐应保持正确坐姿（腰部有支撑、双脚平放）、每45分钟起身活动、加强腰背肌锻炼（如小燕飞）、避免长时间弯腰。",
+                expected_intent="health_advice",
+                expected_entities=["腰椎"],
+                keywords=["腰椎", "坐姿", "锻炼", "久坐", "腰背肌"],
+                category="health_advice",
+                difficulty="easy"
+            ),
+            BenchmarkItem(
+                question="备孕期间需要补充什么营养？",
+                reference_answer="备孕期间女性应每日补充0.4-0.8mg叶酸（预防神经管缺陷），保持均衡营养，戒烟戒酒，男性也应注意戒烟戒酒和补充锌。",
+                expected_intent="health_advice",
+                expected_entities=["备孕"],
+                keywords=["备孕", "叶酸", "营养", "戒烟", "均衡"],
+                category="health_advice",
+                difficulty="easy"
+            ),
+            BenchmarkItem(
+                question="经常熬夜对身体有什么危害？",
+                reference_answer="长期熬夜可导致免疫力下降、内分泌紊乱、心血管疾病风险增加、认知功能下降、情绪障碍、肥胖等，建议保持规律作息。",
+                expected_intent="health_advice",
+                expected_entities=["熬夜"],
+                keywords=["熬夜", "危害", "免疫", "心血管", "作息"],
+                category="health_advice",
+                difficulty="easy"
+            ),
+            BenchmarkItem(
+                question="如何科学减肥？",
+                reference_answer="科学减肥需控制总热量摄入（减少高脂高糖食物）、增加运动量（有氧+力量训练）、每周减重0.5-1kg为宜、避免极端节食、保证充足睡眠。",
+                expected_intent="health_advice",
+                expected_entities=["减肥"],
+                keywords=["减肥", "热量", "运动", "科学", "节食"],
+                category="health_advice",
+                difficulty="easy"
+            ),
+            # ──────────────────────────────────────────────
+            # 新增：disease 疾病查询补充 (8 cases)
+            # ──────────────────────────────────────────────
+            BenchmarkItem(
+                question="系统性红斑狼疮是什么病？",
+                reference_answer="系统性红斑狼疮是一种自身免疫性疾病，免疫系统攻击自身组织，可累及皮肤、关节、肾脏、血液等多个器官系统，好发于育龄女性。",
+                expected_intent="disease_query",
+                expected_entities=["系统性红斑狼疮"],
+                keywords=["红斑狼疮", "自身免疫", "全身", "女性"],
+                category="disease",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="慢性阻塞性肺疾病的病因是什么？",
+                reference_answer="慢阻肺主要病因包括长期吸烟（最常见）、空气污染、职业粉尘和化学物质暴露、儿童期反复呼吸道感染等。",
+                expected_intent="disease_query",
+                expected_entities=["慢性阻塞性肺疾病"],
+                keywords=["慢阻肺", "病因", "吸烟", "空气污染"],
+                category="disease",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="肝硬化能治好吗？",
+                reference_answer="肝硬化是肝脏不可逆的纤维化改变，无法完全治愈，但可通过病因治疗（如抗病毒、戒酒）延缓进展，代偿期可长期稳定。",
+                expected_intent="disease_query",
+                expected_entities=["肝硬化"],
+                keywords=["肝硬化", "不可逆", "延缓", "抗病毒"],
+                category="disease",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="甲状腺功能减退有什么表现？",
+                reference_answer="甲减表现为乏力、怕冷、体重增加、皮肤干燥、便秘、心率减慢、月经紊乱等，严重者可出现黏液性水肿。",
+                expected_intent="disease_query",
+                expected_entities=["甲状腺功能减退"],
+                keywords=["甲减", "乏力", "怕冷", "体重", "黏液性水肿"],
+                category="disease",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="阑尾炎的典型症状是什么？",
+                reference_answer="阑尾炎典型症状为转移性右下腹痛（先上腹或脐周痛，后转移至右下腹），伴恶心呕吐、发热，右下腹麦氏点压痛。",
+                expected_intent="disease_query",
+                expected_entities=["阑尾炎"],
+                keywords=["阑尾炎", "转移性腹痛", "右下腹", "麦氏点"],
+                category="disease",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="带状疱疹会传染吗？",
+                reference_answer="带状疱疹本身不直接传染，但水疱液中的水痘-带状疱疹病毒可致未免疫者感染水痘。避免接触水疱液，尤其孕妇和儿童。",
+                expected_intent="disease_query",
+                expected_entities=["带状疱疹"],
+                keywords=["带状疱疹", "传染", "水痘", "水疱"],
+                category="disease",
+                difficulty="easy"
+            ),
+            BenchmarkItem(
+                question="慢性肾炎会发展成尿毒症吗？",
+                reference_answer="慢性肾炎如不及时规范治疗，部分患者可逐渐进展为慢性肾衰竭和尿毒症。早期诊断和规范治疗可延缓肾功能恶化。",
+                expected_intent="disease_query",
+                expected_entities=["慢性肾炎", "尿毒症"],
+                keywords=["慢性肾炎", "尿毒症", "进展", "延缓"],
+                category="disease",
+                difficulty="medium"
+            ),
+            BenchmarkItem(
+                question="胃食管反流病怎么引起的？",
+                reference_answer="胃食管反流病由下食管括约肌功能障碍导致胃内容物反流入食管，诱因包括肥胖、暴饮暴食、卧位进食、吸烟饮酒等。",
+                expected_intent="disease_query",
+                expected_entities=["胃食管反流"],
+                keywords=["胃食管反流", "括约肌", "反流", "诱因"],
+                category="disease",
+                difficulty="medium"
+            ),
         ]
         
         return dataset

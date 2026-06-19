@@ -1,5 +1,6 @@
 # 虚拟环境
 .venv/
+.venv-*/
 env/
 venv/
 
@@ -35,11 +36,14 @@ coverage.xml
 test_results/
 **/test_results/
 golden_set/pipeline_log.json
+**/golden_set/pipeline_log.json
+htmlcov/
 
 # 评估输出
 **/eval_output*
 **/golden_eval_*.json
 **/ragas_eval_*.json
+**/qa_evaluation_report_*.json
 
 # Python 相关
 __pycache__/
@@ -52,6 +56,9 @@ logs/
 # 数据文件
 data/input/
 data/output/
+
+# 本地模型文件（需手动下载，见 README）
+models/
 
 # 临时文件
 tmp/

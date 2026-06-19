@@ -57,9 +57,6 @@ logs/
 data/input/
 data/output/
 
-# 本地模型文件（需手动下载，见 README）
-models/
-
 # 临时文件
 tmp/
 temp/

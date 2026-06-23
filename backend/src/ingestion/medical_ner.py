@@ -1,11 +1,14 @@
 """Medical NER (Named Entity Recognition) module.
 
-Lightweight rule + dictionary based medical entity extraction as an alternative
-to pure LLM-based extraction. Uses the synonym dictionary from knowledge_fusion
-for high-recall entity matching.
+Multi-strategy medical entity extraction combining:
+1. BERT neural model (bert-base-chinese-medical-ner) for sequence labeling
+2. Rule + dictionary based matching for high-recall entity extraction
+3. Cross-validation across strategies for confidence boosting
 """
 
+import os
 import re
+from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 from loguru import logger
@@ -25,21 +28,138 @@ class NEREntity:
 
 
 class MedicalNER:
-    """Rule + dictionary based medical NER engine.
+    """Rule + dictionary + BERT based medical NER engine.
 
     Uses a multi-strategy approach:
-    1. Exact dictionary match (highest priority, confidence 0.95)
-    2. Abbreviation match (confidence 0.90)
-    3. Regex pattern match for specific entity types (confidence 0.75)
-    4. Suffix/prefix pattern match (confidence 0.70)
+    1. BERT neural model (confidence 0.85)
+    2. Exact dictionary match (highest priority, confidence 0.95)
+    3. Abbreviation match (confidence 0.90)
+    4. Regex pattern match for specific entity types (confidence 0.75)
+    5. Suffix/prefix pattern match (confidence 0.70)
+
+    BERT model is loaded lazily; if unavailable, falls back to rule-only.
     """
 
-    def __init__(self):
+    _BERT_MODEL_DIR = Path(__file__).parent.parent.parent / "models" / "bert-base-chinese-medical-ner"
+
+    def __init__(self, use_bert: bool = True):
         self.disambiguator = EntityDisambiguator()
         self._entity_dict = self._build_entity_dict()
         self._abbreviation_dict = self._build_abbreviation_dict()
         self._regex_patterns = self._build_regex_patterns()
         self._suffix_patterns = self._build_suffix_patterns()
+        self._bert_pipeline = None
+        self._use_bert = use_bert
+
+    def _load_bert_pipeline(self):
+        """Lazily load BERT NER pipeline"""
+        if self._bert_pipeline is not None:
+            return True
+        if not self._use_bert:
+            return False
+        try:
+            from transformers import pipeline
+            model_dir = str(self._BERT_MODEL_DIR)
+            if not os.path.isdir(model_dir):
+                logger.warning(f"BERT model dir not found: {model_dir}")
+                return False
+            self._bert_pipeline = pipeline(
+                "ner",
+                model=model_dir,
+                tokenizer=model_dir,
+                device=-1,
+            )
+            logger.info("BERT medical NER model loaded")
+            return True
+        except Exception as e:
+            logger.warning(f"BERT NER model load failed, using rule-only: {e}")
+            self._bert_pipeline = None
+            return False
+
+    def _bert_extract(self, text: str) -> List[NEREntity]:
+        """Extract entities using BERT model with BIO decoding"""
+        if not self._load_bert_pipeline():
+            return []
+
+        try:
+            raw_results = self._bert_pipeline(text)
+        except Exception as e:
+            logger.warning(f"BERT inference failed: {e}")
+            return []
+
+        # Decode BIO tags into spans
+        entities = []
+        current_tokens = []
+        current_start = None
+
+        for token in raw_results:
+            tag = token["entity"]
+            if tag == "B":
+                # Flush previous entity
+                if current_tokens:
+                    name = "".join(current_tokens).replace("##", "")
+                    if len(name) >= 2:
+                        entity_type = self._classify_bert_entity(name)
+                        entities.append(NEREntity(
+                            name=name,
+                            entity_type=entity_type,
+                            start_pos=current_start,
+                            end_pos=token["start"],
+                            confidence=token.get("score", 0.85),
+                            strategy="bert",
+                        ))
+                current_tokens = [token["word"]]
+                current_start = token["start"]
+            elif tag in ("I", "M"):
+                current_tokens.append(token["word"])
+            else:  # "O" or "E" or "0"
+                if current_tokens:
+                    name = "".join(current_tokens).replace("##", "")
+                    if len(name) >= 2:
+                        entity_type = self._classify_bert_entity(name)
+                        entities.append(NEREntity(
+                            name=name,
+                            entity_type=entity_type,
+                            start_pos=current_start,
+                            end_pos=token["start"],
+                            confidence=token.get("score", 0.85),
+                            strategy="bert",
+                        ))
+                    current_tokens = []
+                    current_start = None
+
+        # Flush trailing entity
+        if current_tokens:
+            name = "".join(current_tokens).replace("##", "")
+            if len(name) >= 2:
+                entity_type = self._classify_bert_entity(name)
+                entities.append(NEREntity(
+                    name=name,
+                    entity_type=entity_type,
+                    start_pos=current_start,
+                    end_pos=len(text),
+                    confidence=0.85,
+                    strategy="bert",
+                ))
+
+        return entities
+
+    def _classify_bert_entity(self, name: str) -> str:
+        """Classify BERT-extracted entity into medical schema type"""
+        if name in self._entity_dict:
+            return self._entity_dict[name]
+        # Fallback: suffix heuristics
+        if any(name.endswith(s) for s in ("病", "症", "炎", "癌", "瘤", "疾")):
+            return "Disease"
+        if any(name.endswith(s) for s in ("痛", "痒", "晕", "胀", "麻", "咳", "喘", "烧")):
+            return "Symptom"
+        if any(name.endswith(s) for s in ("片", "胶囊", "注射液", "颗粒", "素", "林", "平", "汀")):
+            return "Drug"
+        if any(name.endswith(s) for s in ("手术", "治疗", "疗法", "化疗", "放疗")):
+            return "Treatment"
+        if name.endswith("科"):
+            return "Department"
+        return "Disease"
 
     def _build_entity_dict(self) -> Dict[str, str]:
         """Build reverse lookup: entity_name -> entity_type"""
@@ -109,6 +229,14 @@ class MedicalNER:
         """
         entities = []
         seen_spans = set()
+
+        # Strategy 0: BERT neural model (adds entities not caught by rules)
+        bert_entities = self._bert_extract(text)
+        for ent in bert_entities:
+            span_key = (ent.start_pos, ent.end_pos)
+            if span_key not in seen_spans:
+                seen_spans.add(span_key)
+                entities.append(ent)
 
         entities.extend(self._exact_match(text, seen_spans))
         entities.extend(self._abbreviation_match(text, seen_spans))

@@ -217,13 +217,12 @@ class KnowledgeGraphBuilder:
         self._create_document_node(document)
 
         # 分割文档为文本块
-        from .text_splitter import TextSplitter, select_chunking_strategy
+        from .text_splitter import TextSplitter, SplitStrategy, select_chunking_strategy
 
         strategy_name = settings.split_strategy
         if strategy_name == "auto":
             strategy = select_chunking_strategy(document.content, settings.domain)
         else:
-            from .text_splitter import SplitStrategy
             strategy = SplitStrategy(strategy_name)
 
         logger.info(f"Using chunking strategy: {strategy.value} for document {document.id}")
@@ -231,10 +230,15 @@ class KnowledgeGraphBuilder:
         splitter = TextSplitter(
             chunk_size=settings.chunk_size,
             chunk_overlap=settings.chunk_overlap,
+            soft_max=settings.soft_max,
             strategy=strategy,
         )
         chunks = splitter.split_text(document.content, document.id)
         results["chunks_created"] = len(chunks)
+
+        # 上下文增强（可选，默认关闭；需传入 llm_call 函数）
+        if settings.contextual_enrichment:
+            logger.info("Contextual enrichment is enabled but requires llm_call integration")
 
         # 收集所有实体和关系用于去重
         entity_map: Dict[str, Entity] = {}

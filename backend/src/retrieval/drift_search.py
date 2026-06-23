@@ -49,29 +49,35 @@ class DRIFTSearch:
         """
         global_indicators = [
             "总结", "概述", "整体", "主要", "全部", "共有",
-            "介绍", "简述", "总览", "概况", "全面", "整体来看"
+            "介绍", "简述", "总览", "概况", "全面", "整体来看",
+            "对比", "比较", "区别", "异同", "分类",
         ]
         
         local_indicators = [
             "谁", "什么", "哪个", "详细", "具体", "如何",
-            "有哪些", "是什么", "在哪里", "如何", "为什么", "怎么样"
+            "有哪些", "是什么", "在哪里", "为什么", "怎么样",
+            "原因", "治疗", "症状", "副作用", "用法", "用量",
+            "检查", "预防", "注意", "建议",
         ]
         
         numeric_indicators = [
-            "多少", "数量", "统计", "排名", "前", "最高", "最低"
+            "多少", "数量", "统计", "排名", "前", "最高", "最低",
         ]
         
         query_lower = query.lower()
         
         global_count = sum(1 for ind in global_indicators if ind in query_lower)
         local_count = sum(1 for ind in local_indicators if ind in query_lower)
-        numeric_count = sum(1 for ind in numeric_indicators if query_lower.count(ind))
+        numeric_count = sum(1 for ind in numeric_indicators if ind in query_lower)
         
         if global_count > local_count:
             return "global"
         elif local_count > global_count:
             return "local"
         elif numeric_count > 0:
+            return "local"
+        elif local_count == global_count and local_count > 0:
+            # 边界情况：关键词计数相同时，优先走 local（更常见的查询模式）
             return "local"
         else:
             return "hybrid"

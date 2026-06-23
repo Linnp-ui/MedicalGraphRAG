@@ -60,9 +60,19 @@ class Settings(BaseSettings):
 
     chunk_size: int = Field(default=512)
     chunk_overlap: int = Field(default=75)
+    soft_max: int = Field(default=384, description="软阈值，达到此值时尝试闭合chunk")
     split_strategy: str = Field(default="auto")
     keep_code_blocks: bool = Field(default=True)
     keep_headers: bool = Field(default=True)
+
+    semantic_buffer_size: int = Field(default=1, description="语义切分窗口大小")
+    semantic_breakpoint_percentile: int = Field(default=95, description="语义断点百分位")
+    semantic_model: str = Field(default="shibing624/text2vec-base-chinese")
+
+    contextual_enrichment: bool = Field(default=False, description="是否启用上下文增强")
+    contextual_llm_model: str = Field(default="qwen-flash")
+
+    late_chunking_enabled: bool = Field(default=False, description="延迟分块（预留）")
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

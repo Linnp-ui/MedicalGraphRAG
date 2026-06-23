@@ -48,6 +48,7 @@ class DocumentProcessingPipeline:
         self.text_splitter = TextSplitter(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
+            soft_max=int(chunk_size * 0.75),
             strategy=SplitStrategy(split_strategy),
         )
         self.medical_processor = MedicalTextProcessor() if enable_medical_processing else None
